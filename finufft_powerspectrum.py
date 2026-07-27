@@ -1,11 +1,7 @@
 import numpy as np
 from finufft import Plan
-from abacusnbody.analysis.power_spectrum import (
-    calc_power,
-    calc_pk_from_deltak,
-    get_k_mu_edges,
-)
-
+import os
+import subprocess
 
 class FinufftPowerSpectrum:
     def __init__(self, nmesh: tuple[int], boxsize: float, dtype=np.complex64, **kwargs):
@@ -44,11 +40,19 @@ class FinufftPowerSpectrum:
             eps=eps,
             isign=-1,
             dtype=dtype,
-            fftw=fftw,
-            upsampfac=upsampfac,
-            modeord=modeord,
+            nthreads=os.cpu_count()-1,
+            **kwargs
         )
 
+    #IN progress: original plan was get htop output but what if windows?
+    #for now, just CPU-1
+    # def _calc_num_cpu(nmesh, ):
+    #     #Roughly estimate a good number of cpus
+    #     #Each data points is 32 bits
+    #     #Get L2 cache storage size
+    #     htop_output = subprocess.run('htop')
+    #     return num_cpu
+    
     def _plan_shape(self):
         n_modes = np.atleast_1d(self.nmesh)
         if n_modes.ndim != 1 or not (1 <= len(n_modes) <= 3):
@@ -68,28 +72,26 @@ class FinufftPowerSpectrum:
         positions /= self.boxsize
         self.pos_shape = positions.shape
         shift = self.nmesh[-1] // 2  # Take half of the z-axis grid size
-        self._realify_weights = np.exp(-1j * shift * positions[:, 2]).astype(self.dtype)
+        self._realify_weights = np.exp(-1j * shift * positions[:, 2]).astype(self.cdtype)
         self._Npts = len(positions.ravel())
         # FINUFFT asks for C arrays, if underlying data is not 3,N FINUFFT makes a copy
         self.plan.setpts(x=positions[0, :], y=positions[1, :], z=positions[2, :])
 
     def compute_field(self, weights:tuple=None, out:tuple=None):
-        w_shape = weights.shape
-
         #set weights
         if weights:
-            if not w_shape == self.pos_shape:
+            if not self._w_shape == self.pos_shape:
                 raise AssertionError(
-                    f"Shape of weights {w_shape} and positions {self.pos_shape} must match"
+                    f"Shape of weights {self._w_shape} and positions {self.pos_shape} must match"
                 )
         else:
             weights = np.ascontiguousarray(np.ones(shape=(self._Npts)), dtype=np.complex64)
-
+        self._w_shape = weights.shape
         #set output
         if out:
             if not out.shape == self._plan_shape:
                 raise AssertionError(
-                                    f"Shape of weights {w_shape} and positions {self.pos_shape} must match"
+                                    f"Shape of weights {self._w_shape} and positions {self.pos_shape} must match"
                                 )
         else:
             out = np.zeros(self._plan_shape(), dtype=self.cdtype)
@@ -98,12 +100,15 @@ class FinufftPowerSpectrum:
         return field
 
     def compute_bandpower(self, field):
+        if not self._w_shape == field.shape:
+            raise AssertionError(
+                                f"Shape of weights {self._w_shape} and positions {field.shape} must match"
+                            )
         raw_power = np.abs(field) ** 2
         L = self.boxsize
         dk = 2 * np.pi / self.boxsize
         # get bin edges, k is wave mode, mu is angle away from LOS,
-        # get_kmu_edges()
-
+        
         n_modes = np.atleast_1d(self.nmesh)
         # Nyquist is limited by the coarsest axis so bins stay within every axis's range
         k_max = np.pi * n_modes.min() / L
