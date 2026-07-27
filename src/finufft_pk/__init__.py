@@ -1,3 +1,3 @@
-from .power_spectrum import FinufftPowerSpectrum
+from .finufft_powerspectrum import FinufftPowerSpectrum
 
 __all__ = ["FinufftPowerSpectrum"]

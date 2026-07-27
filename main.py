@@ -1,4 +1,4 @@
-from finufft_powerspectrum import FinufftPowerSpectrum
+from src.finufft_pk.finufft_powerspectrum import FinufftPowerSpectrum
 import numpy as np
 import pickle
 
