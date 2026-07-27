@@ -1,28 +1,20 @@
 from finufft_powerspectrum import FinufftPowerSpectrum
-import pickle 
+import numpy as np
+import pickle
 
 def main():
-    print("Hello from finufft-pk!")
-
-
-# if __name__ == "__main__":
-powerspectrum = FinufftPowerSpectrum(nmesh = (64, 64, 64), boxsize=250)
-#read in data
-fname = '/mnt/home/pkottapalli/fft_benchmark/positions_grid_64_nbar1000_P00.05.pkl'
-with open(fname, 'rb') as f:
-    pos_dict = pickle.load(f)
+    fname = '/mnt/home/pkottapalli/fft_benchmark/positions_grid_512_nbar1_P01.pkl'
+    with open(fname, 'rb') as f:
+        pos_dict = pickle.load(f)
     ngen = pos_dict['ngen']
-    pos_red = pos_dict['pos']
-    N_red = len(pos_red)
+    # stored as (N, 3); set_positions needs (D, N)
+    pos_red = np.ascontiguousarray(pos_dict['pos'].T)
     L = pos_dict['L']
-    P0 = pos_dict['P0']
-    n_index = pos_dict['n_index']
-    nbar = pos_dict['nbar']
 
-print('setting positions')
-powerspectrum.set_positions(positions=pos_red)
-print('computing field')
-field = powerspectrum.compute_field()
-print('computing bandpowers')
-powerspectrum.compute_bandpower(field)
-main()
+    powerspectrum = FinufftPowerSpectrum(nmesh=(ngen, ngen, ngen//2), boxsize=L)
+
+    powerspectrum.powerspectrum_field(pos_red)
+
+
+if __name__ == "__main__":
+    main()

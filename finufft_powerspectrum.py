@@ -1,7 +1,7 @@
 import numpy as np
 from finufft import Plan
-import os
-import subprocess
+# import os
+# import subprocess
 
 class FinufftPowerSpectrum:
     def __init__(self, nmesh: tuple[int], boxsize: float, dtype=np.complex64, **kwargs):
@@ -15,10 +15,11 @@ class FinufftPowerSpectrum:
         kwargs: finufft fft precision and spreading function arguments -- upsampfac, fftw, modeord, eps
         """
         # Necessarily real space
-        modeord = kwargs.setdefault('modeord', 0)
-        eps = kwargs.setdefault("eps", 1e-4)
-        upsampfac = kwargs.setdefault("upsampfac", 1.25)
-        fftw = kwargs.setdefault("fftw", 0)
+        kwargs.setdefault('modeord', 0)
+        kwargs.setdefault("eps", 1e-4)
+        kwargs.setdefault("upsampfac", 1.25)
+        kwargs.setdefault("fftw", 0)
+        #default num cpus is all in finufft plan
 
         dtype_dict = {np.complex64: np.float32, np.complex128:np.float64}
         if dtype not in dtype_dict.keys():
@@ -37,10 +38,8 @@ class FinufftPowerSpectrum:
             nufft_type=1,
             n_modes_or_dim=self._plan_shape(),
             n_trans=1,
-            eps=eps,
             isign=-1,
             dtype=dtype,
-            nthreads=os.cpu_count()-1,
             **kwargs
         )
 
@@ -67,29 +66,35 @@ class FinufftPowerSpectrum:
         Rescale points from [-pi,pi) and pass it to the FINUFFT plan.
         Does not create uniform grid yet (no spreading step).
         """
+        n_modes = np.atleast_1d(self.nmesh)
+        dim = len(n_modes)
+        if positions.shape[0] != dim:
+            raise AssertionError(
+                f"positions has {positions.shape[0]} axes but nmesh implies dim={dim}"
+            )
+        positions = self.rdtype(positions)
         # rescale from [-pi, pi) for correct physical scaling
-        positions *= 2 * np.pi
-        positions /= self.boxsize
+        positions = positions * (2 * np.pi / self.boxsize)
         self.pos_shape = positions.shape
-        shift = self.nmesh[-1] // 2  # Take half of the z-axis grid size
-        self._realify_weights = np.exp(-1j * shift * positions[:, 2]).astype(self.cdtype)
-        self._Npts = len(positions.ravel())
-        # FINUFFT asks for C arrays, if underlying data is not 3,N FINUFFT makes a copy
-        self.plan.setpts(x=positions[0, :], y=positions[1, :], z=positions[2, :])
+        shift = n_modes[-1] // 2  # Take half of the last axis's grid size
+        self._realify_weights = np.exp(-1j * shift * positions[-1, :]).astype(self.cdtype)
+        self._Npts = positions.shape[-1]
+        # FINUFFT asks for C arrays, if underlying data is not (dim, N) FINUFFT makes a copy
+        self.plan.setpts(*positions)
 
     def compute_field(self, weights:tuple=None, out:tuple=None):
         #set weights
-        if weights:
+        if weights is not None:
             if not self._w_shape == self.pos_shape:
                 raise AssertionError(
                     f"Shape of weights {self._w_shape} and positions {self.pos_shape} must match"
                 )
         else:
-            weights = np.ascontiguousarray(np.ones(shape=(self._Npts)), dtype=np.complex64)
+            weights = np.ascontiguousarray(np.ones(shape=(self._Npts)), dtype=self.cdtype)
         self._w_shape = weights.shape
         #set output
-        if out:
-            if not out.shape == self._plan_shape:
+        if out is not None:
+            if not out.shape == self._plan_shape():
                 raise AssertionError(
                                     f"Shape of weights {self._w_shape} and positions {self.pos_shape} must match"
                                 )
@@ -100,10 +105,10 @@ class FinufftPowerSpectrum:
         return field
 
     def compute_bandpower(self, field):
-        if not self._w_shape == field.shape:
-            raise AssertionError(
-                                f"Shape of weights {self._w_shape} and positions {field.shape} must match"
-                            )
+        # if field.shape != self.pos_shape:
+        #     raise AssertionError(
+        #                         f"Shape of field {field.shape} and positions {self.pos_shape} must match"
+        #                     )
         raw_power = np.abs(field) ** 2
         L = self.boxsize
         dk = 2 * np.pi / self.boxsize
@@ -159,3 +164,14 @@ class FinufftPowerSpectrum:
                 weight = 1 if k == 0 else 2
                 counts[bk, bmu] += weight
                 weighted_counts[bk, bmu] += weight * raw_power[perp_idx + (k,)]
+        
+    def powerspectrum_field(self, positions: tuple, weights:tuple=None, out:tuple=None):
+    
+                print('setting positions')
+                self.set_positions(positions=positions)
+                print('computing field')
+                field = self.compute_field(weights, out)
+                print('computing bandpowers')
+                powerspectrum = self.compute_bandpower(field)
+    
+                return powerspectrum
