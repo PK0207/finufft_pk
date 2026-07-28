@@ -88,16 +88,16 @@ class FinufftPowerSpectrum:
     def compute_field(self, weights: tuple = None, out: tuple = None):
         # set weights
         if weights is not None:
-            pass
+            if not weights.shape == (self._Npts,):
+                        raise AssertionError(
+                            f"Shape of weights {self._w_shape} must match number of points ({self._Npts},)"
+                        )
         else:
             weights = np.ascontiguousarray(
                 np.ones(shape=(self._Npts)), dtype=self.cdtype
             )
         self._w_shape = weights.shape
-        if not self._w_shape == (self._Npts,):
-            raise AssertionError(
-                f"Shape of weights {self._w_shape} must match number of points ({self._Npts},)"
-            )
+        
         # set output
         if out is not None:
             if not out.shape == self._plan_shape():
@@ -137,13 +137,14 @@ class FinufftPowerSpectrum:
         kedges2 = (kbins / dk) ** 2
         muedges2 = mubins**2
 
-        # all axes but the last need +/-N/2 wraparound folding; the last axis
-        # is already the real-transform half-plane (0..N/2), so it never folds
+        # all axes but the last are stored in FINUFFT's CMCL (modeord=0) order, i.e. index 0
+        # is k=-N/2 and index N-1 is k=(N-1)/2 (no FFT-style wraparound); the last axis is
+        # already the real-transform half-plane (0..N/2), so it's handled separately
         fold_shape = field.shape[:-1]
         len_z = field.shape[-1]
 
         def folded_sq(idx, n):
-            return idx**2 if idx < n // 2 else (idx - n) ** 2
+            return (idx - n // 2) ** 2
 
         for perp_idx in np.ndindex(*fold_shape):
             perp2 = sum(folded_sq(i, n) for i, n in zip(perp_idx, fold_shape))
@@ -170,7 +171,14 @@ class FinufftPowerSpectrum:
                 weight = 1 if k == 0 else 2
                 counts[bk, bmu] += weight
                 weighted_counts[bk, bmu] += weight * raw_power[perp_idx + (k,)]
-        return counts, weighted_counts
+
+        for i in range(Nk):
+            for j in range(Nmu):
+                weighted_counts[i,j] /= counts[i,j]
+
+        bandpower = weighted_counts*(L**3)
+        bandpower = bandpower.flatten()
+        return counts, weighted_counts, bandpower
 
     def powerspectrum_field(
         self, positions: tuple, weights: tuple = None, out: tuple = None
