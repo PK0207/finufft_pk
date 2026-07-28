@@ -46,6 +46,7 @@ def test_compute_field_with_explicit_weights(rng):
 
 
 def test_compute_bandpower_recovers_shot_noise_level(abacus_reference):
+    #!TODO: Test the full bandpowers range
     """A weakly-clustered catalog (small P0) should have P(k) close to the analytic shot-noise
     level 1/nbar away from the DC/Nyquist bins. Compared against the known analytic shot noise
     rather than the stored abacus fixture directly, since this class's bin count/edges (derived
