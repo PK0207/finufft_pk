@@ -8,12 +8,14 @@ def main():
         pos_dict = pickle.load(f)
     ngen = pos_dict['ngen']
     # stored as (N, 3); set_positions needs (D, N)
-    pos_red = np.ascontiguousarray(pos_dict['pos'].T)
+    pos_red = np.ascontiguousarray(pos_dict['pos'].T, dtype='float32')
     L = pos_dict['L']
 
-    powerspectrum = FinufftPowerSpectrum(nmesh=(ngen, ngen, ngen//2), boxsize=L)
+    powerspectrum = FinufftPowerSpectrum(nmesh=(ngen, ngen, ngen), boxsize=L)
 
-    powerspectrum.powerspectrum_field(pos_red)
+    counts, weighted_counts, bandpowers = powerspectrum.powerspectrum_field(pos_red)
+    with open('test_power_calc.pkl', 'wb') as file:
+        pickle.dump((weighted_counts, counts, bandpowers), file)
 
 
 if __name__ == "__main__":

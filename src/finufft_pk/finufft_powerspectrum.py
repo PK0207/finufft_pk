@@ -10,12 +10,13 @@ class FinufftPowerSpectrum:
         Class inputs (N & M convention inherited from finufft):
         positions: Input position grid, array of shape (D,N)
         weights: Input weights, array of shape (D,N)
-        n_modes: Input number of modes, array of shape (M,D)
+        n_modes: Input number of modes, array of shape (D,M)
         dtype: precision level (32 floating point or 64)
         Lbox: int; box size in which points lie
         kwargs: finufft fft precision and spreading function arguments -- upsampfac, fftw, modeord, eps
         """
         # Necessarily real space
+        #!TODO: check that modeord = 0 (assert)
         kwargs.setdefault("modeord", 0)
         kwargs.setdefault("eps", 1e-4)
         kwargs.setdefault("upsampfac", 1.25)
@@ -78,9 +79,7 @@ class FinufftPowerSpectrum:
         positions = positions * (2 * np.pi / self.boxsize)
         self.pos_shape = positions.shape
         shift = n_modes[-1] // 2  # Take half of the last axis's grid size
-        self._realify_weights = np.exp(-1j * shift * positions[-1, :]).astype(
-            self.cdtype
-        )
+        self._realify_weights = np.exp(-1j * shift * positions[-1, :]).astype(self.cdtype)
         self._Npts = positions.shape[-1]
         # FINUFFT asks for C arrays, if underlying data is not (dim, N) FINUFFT makes a copy
         self.plan.setpts(*positions)
@@ -102,7 +101,7 @@ class FinufftPowerSpectrum:
         if out is not None:
             if not out.shape == self._plan_shape():
                 raise AssertionError(
-                    f"Shape of weights {self._w_shape} and positions {self.pos_shape} must match"
+                    f"Shape of output {out.shape} and meshgrid {self._plan_shape()} must match"
                 )
         else:
             out = np.zeros(self._plan_shape(), dtype=self.cdtype)
@@ -111,6 +110,7 @@ class FinufftPowerSpectrum:
         return field
 
     def compute_bandpower(self, field):
+        #!TODO: change bandpower computation so that everything except last axis is handled properly
         if field.shape != self._plan_shape():
             raise AssertionError(
                 f"Shape of field {field.shape} must match plan shape {self._plan_shape()}"
@@ -119,11 +119,12 @@ class FinufftPowerSpectrum:
         L = self.boxsize
         dk = 2 * np.pi / self.boxsize
         # get bin edges, k is wave mode, mu is angle away from LOS,
-
-        n_modes = np.atleast_1d(self.nmesh)
+        fold_shape = field.shape[:-1]
+        len_z = field.shape[-1]
+        full_n = np.array(list(fold_shape) + [2 * len_z])
         # Nyquist is limited by the coarsest axis so bins stay within every axis's range
-        k_max = np.pi * n_modes.min() / L
-        kbins = np.linspace(0, k_max, n_modes.min() // 2 + 1)
+        k_max = np.pi * full_n.min() / L
+        kbins = np.linspace(0, k_max, full_n.min() // 2 + 1)
 
         mu = 1
         mubins = np.linspace(0, 1, mu + 1)
