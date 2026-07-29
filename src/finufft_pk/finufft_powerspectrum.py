@@ -1,7 +1,8 @@
 import numpy as np
 from finufft import Plan
 import warnings
-# import os
+from .binning import bandpower_from_field
+import os
 # import subprocess
 
 
@@ -122,86 +123,30 @@ class FinufftPowerSpectrum:
         field = self.plan.execute(weights * self._realify_weights, out=out)
         return field
 
-    def compute_bandpower(self, field):#, kbins, mubins):
-        #!TODO: change bandpower computation so that everything except last axis is handled properly
-        if field.shape != self._plan_shape():
-            raise AssertionError(
-                f"Shape of field {field.shape} must match plan shape {self._plan_shape()}"
-            )
-        raw_power = np.abs(field) ** 2
-        L = self.boxsize
-        dk = 2 * np.pi / self.boxsize
-        # get bin edges, k is wave mode, mu is angle away from LOS,
-        fold_shape = field.shape[:-1]
-        len_z = field.shape[-1]
-        full_n = np.array(list(fold_shape) + [2 * len_z])
-        # Nyquist is limited by the coarsest axis so bins stay within every axis's range
-        k_max = np.pi * full_n.min() / L
-        kbins = np.linspace(0, k_max, full_n.min() // 2 + 1)
+    def compute_bandpower(self, field, kbins:int=None, mubins:int=1, nthread:int=None):
+            if field.shape != self._plan_shape():
+                raise AssertionError(
+                    f"Shape of field {field.shape} must match plan shape {self._plan_shape()}"
+                )
+            k_binc, counts, weighted_counts, bandpower = bandpower_from_field(field, self.boxsize, kbins, mubins, nthread=None)
+            return k_binc, counts, weighted_counts, bandpower
 
-        mu = 1
-        mubins = np.linspace(0, 1, mu + 1)
+# @dataclass
+# class FinufftPkResult:
+#     k_edges: np.typing.ArrayLike  # length N+1
+#     k_avg: np.typing.ArrayLike  # length N
+#     power: np.typing.ArrayLike  # length N
+#     boxsize: float
+#     # etc
 
-        # create bandpower_array
-        Nk, Nmu = len(kbins) - 1, len(mubins) - 1
-        counts = np.zeros((Nk, Nmu))
-        weighted_counts = np.zeros((Nk, Nmu))
+def powerspectrum_field(nmesh: tuple[int], boxsize: float, positions: tuple, weights: tuple = None, out: tuple = None, dtype=np.complex64, kbins:int=None, mubins:int=1, nthread:int=None, **kwargs):
+    print('Initializing FINUFFT Plan')
+    plan = FinufftPowerSpectrum(nmesh=nmesh, boxsize=boxsize, dtype=dtype, **kwargs)
+    print("setting positions")
+    plan.set_positions(positions=positions)
+    print("computing field")
+    field = plan.compute_field(weights, out)
+    print("computing bandpowers")
+    powerspectrum = plan.compute_bandpower(field, kbins, mubins, nthread)
 
-        # bin_kmu()
-        kedges2 = (kbins / dk) ** 2
-        muedges2 = mubins**2
-
-        # all axes but the last are stored in FINUFFT's CMCL (modeord=0) order, i.e. index 0
-        # is k=-N/2 and index N-1 is k=(N-1)/2 (no FFT-style wraparound); the last axis is
-        # already the real-transform half-plane (0..N/2), so it's handled separately
-        fold_shape = field.shape[:-1]
-        len_z = field.shape[-1]
-        def folded_sq(idx, n):
-            # CMCL order is already centered (idx=0 -> k=-N/2), so no wraparound needed
-            return (idx - n // 2) ** 2
-
-        for perp_idx in np.ndindex(*fold_shape):
-            perp2 = sum(folded_sq(i, n) for i, n in zip(perp_idx, fold_shape))
-            for k in range(len_z):
-                bk, bmu = 0, 0  # k-mode counter, so we don't add counts the zero mode
-                k2 = k**2
-                mag = perp2 + k2
-
-                if mag > 0:
-                    invkmag2 = mag**-1
-                    mu2 = k2 * invkmag2
-                else:
-                    mu2 = 0
-
-                if mag < kedges2[0]:  # if it goes below the initial mode ignore it
-                    continue
-                if mag >= kedges2[-1]:  # if it reaches kmax, we're done
-                    break
-                while mag > kedges2[bk + 1]:
-                    bk += 1  # don't double count zeroth order
-                while mu2 > muedges2[bmu + 1]:
-                    bmu += 1
-
-                weight = 1 if k == 0 else 2
-                counts[bk, bmu] += weight
-                weighted_counts[bk, bmu] += weight * raw_power[perp_idx + (k,)]
-
-        for i in range(Nk):
-            for j in range(Nmu):
-                weighted_counts[i,j] /= counts[i,j]
-
-        bandpower = weighted_counts*(L**3)
-        bandpower = bandpower.flatten()
-        return counts, weighted_counts, bandpower
-
-    def powerspectrum_field(
-        self, positions: tuple, weights: tuple = None, out: tuple = None
-    ):
-        print("setting positions")
-        self.set_positions(positions=positions)
-        print("computing field")
-        field = self.compute_field(weights, out)
-        print("computing bandpowers")
-        powerspectrum = self.compute_bandpower(field)
-
-        return powerspectrum
+    return powerspectrum #Change to FINUFFT data class
