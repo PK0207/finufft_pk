@@ -1,5 +1,6 @@
 import numpy as np
 from finufft import Plan
+import warnings
 # import os
 # import subprocess
 
@@ -21,6 +22,8 @@ class FinufftPowerSpectrum:
         kwargs.setdefault("eps", 1e-4)
         kwargs.setdefault("upsampfac", 1.25)
         kwargs.setdefault("fftw", 0)
+        if kwargs['modeord'] == 1:
+            raise AssertionError('Mode order 1 is not supported in finufft_pk. Please use modeord = 0.')
         # default num cpus is all in finufft plan
 
         dtype_dict = {np.complex64: np.float32, np.complex128: np.float64}
@@ -63,7 +66,7 @@ class FinufftPowerSpectrum:
         *lead, last = n_modes
         return tuple(lead) + (last // 2,)
 
-    def set_positions(self, positions: tuple):
+    def set_positions(self, positions: tuple, inplace=False):
         """
         Rescale points from [-pi,pi) and pass it to the FINUFFT plan.
         Does not create uniform grid yet (no spreading step).
@@ -74,9 +77,16 @@ class FinufftPowerSpectrum:
             raise AssertionError(
                 f"positions has {positions.shape[0]} axes but nmesh implies dim={dim}"
             )
-        positions = self.rdtype(positions)
-        # rescale from [-pi, pi) for correct physical scaling
-        positions = positions * (2 * np.pi / self.boxsize)
+        if positions.dtype != self.rdtype:
+            if not inplace:
+                warnings.warn(f"Positions array has dtype {positions.dtype}, which does not match the expected dtype {self.rdtype}. This will affect the performance of finufft.", UserWarning)
+            elif inplace:
+                raise TypeError(f"Positions array has dtype {positions.dtype}, which does not match the expected dtype {self.rdtype}.")
+        
+        if inplace:
+            positions*= 2*np.pi/self.boxsize
+        else:
+            positions = positions * (2 * np.pi / self.boxsize)
         self.pos_shape = positions.shape
         shift = n_modes[-1] // 2  # Take half of the last axis's grid size
         self._realify_weights = np.exp(-1j * shift * positions[-1, :]).astype(self.cdtype)
@@ -109,7 +119,7 @@ class FinufftPowerSpectrum:
         field = self.plan.execute(weights * self._realify_weights, out=out)
         return field
 
-    def compute_bandpower(self, field):
+    def compute_bandpower(self, field):#, kbins, mubins):
         #!TODO: change bandpower computation so that everything except last axis is handled properly
         if field.shape != self._plan_shape():
             raise AssertionError(
