@@ -64,7 +64,7 @@ class FinufftPowerSpectrum:
                 f"n_modes must have length 1-3, got shape {n_modes.shape}"
             )
         *lead, last = n_modes
-        return tuple(lead) + (last // 2,)
+        return tuple(lead) + (last // 2 + 1,)
 
     def set_positions(self, positions: tuple, inplace=False):
         """
@@ -88,7 +88,10 @@ class FinufftPowerSpectrum:
         else:
             positions = positions * (2 * np.pi / self.boxsize)
         self.pos_shape = positions.shape
-        shift = n_modes[-1] // 2  # Take half of the last axis's grid size
+        # shift = n_modes[-1] // 2  # Take half of the last axis's grid size
+        # self._realify_weights = np.exp(-1j * shift * positions[-1, :]).astype(self.cdtype)
+        plan_last = self._plan_shape()[-1]  # = nmesh // 2 = 256
+        shift = plan_last // 2              # = 128
         self._realify_weights = np.exp(-1j * shift * positions[-1, :]).astype(self.cdtype)
         self._Npts = positions.shape[-1]
         # FINUFFT asks for C arrays, if underlying data is not (dim, N) FINUFFT makes a copy
@@ -153,15 +156,15 @@ class FinufftPowerSpectrum:
         # already the real-transform half-plane (0..N/2), so it's handled separately
         fold_shape = field.shape[:-1]
         len_z = field.shape[-1]
-
         def folded_sq(idx, n):
+            # CMCL order is already centered (idx=0 -> k=-N/2), so no wraparound needed
             return (idx - n // 2) ** 2
 
         for perp_idx in np.ndindex(*fold_shape):
             perp2 = sum(folded_sq(i, n) for i, n in zip(perp_idx, fold_shape))
             for k in range(len_z):
                 bk, bmu = 0, 0  # k-mode counter, so we don't add counts the zero mode
-                k2 = k**2  # 0 to N/2
+                k2 = k**2
                 mag = perp2 + k2
 
                 if mag > 0:
