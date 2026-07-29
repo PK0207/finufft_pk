@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from finufft_pk.finufft_powerspectrum import FinufftPowerSpectrum
+from finufft_pk.power import FinufftPk
 
 
 def _make_catalog(rng, boxsize=64.0, n=2000):
@@ -12,17 +12,17 @@ def _make_catalog(rng, boxsize=64.0, n=2000):
 
 def test_rejects_unsupported_dtype():
     with pytest.raises(AssertionError):
-        FinufftPowerSpectrum(nmesh=(16, 16, 16), boxsize=64.0, dtype=np.float32)
+        FinufftPk(nmesh=(16, 16, 16), boxsize=64.0, dtype=np.float32)
 
 
 def test_plan_shape_is_half_plane_on_last_axis():
-    fps = FinufftPowerSpectrum(nmesh=(16, 16, 16), boxsize=64.0)
+    fps = FinufftPk(nmesh=(16, 16, 16), boxsize=64.0)
     assert fps._plan_shape() == (16, 16, 8)
 
 
 def test_set_positions_and_compute_field_default_weights(rng):
     nmesh = (16, 16, 16)
-    fps = FinufftPowerSpectrum(nmesh=nmesh, boxsize=64.0)
+    fps = FinufftPk(nmesh=nmesh, boxsize=64.0)
     pos = _make_catalog(rng)
 
     fps.set_positions(pos)
@@ -35,7 +35,7 @@ def test_set_positions_and_compute_field_default_weights(rng):
 
 def test_compute_field_with_explicit_weights(rng):
     nmesh = (16, 16, 16)
-    fps = FinufftPowerSpectrum(nmesh=nmesh, boxsize=64.0)
+    fps = FinufftPk(nmesh=nmesh, boxsize=64.0)
     pos = _make_catalog(rng)
     w = rng.uniform(0.5, 1.5, size=pos.shape[-1]).astype(np.complex64)
 
@@ -57,7 +57,7 @@ def test_compute_bandpower_recovers_shot_noise_level(abacus_reference):
     N = pos.shape[-1]
     L = meta["L"]
 
-    fps = FinufftPowerSpectrum(nmesh=(meta["ngen"],) * 3, boxsize=L)
+    fps = FinufftPk(nmesh=(meta["ngen"],) * 3, boxsize=L)
     fps.set_positions(pos)
     field = fps.compute_field()
     counts, weighted_counts = fps.compute_bandpower(field)

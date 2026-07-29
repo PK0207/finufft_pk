@@ -2,11 +2,9 @@ import numpy as np
 from finufft import Plan
 import warnings
 from .binning import bandpower_from_field
-import os
-# import subprocess
 
 
-class FinufftPowerSpectrum:
+class FinufftPk:
     def __init__(self, nmesh: tuple[int], boxsize: float, dtype=np.complex64, **kwargs):
         """
         Class inputs (N & M convention inherited from finufft):
@@ -141,7 +139,7 @@ class FinufftPowerSpectrum:
 
 def powerspectrum_field(nmesh: tuple[int], boxsize: float, positions: tuple, weights: tuple = None, out: tuple = None, dtype=np.complex64, kbins:int=None, mubins:int=1, nthread:int=None, **kwargs):
     print('Initializing FINUFFT Plan')
-    plan = FinufftPowerSpectrum(nmesh=nmesh, boxsize=boxsize, dtype=dtype, **kwargs)
+    plan = FinufftPk(nmesh=nmesh, boxsize=boxsize, dtype=dtype, **kwargs)
     print("setting positions")
     plan.set_positions(positions=positions)
     print("computing field")
