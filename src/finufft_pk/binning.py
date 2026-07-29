@@ -14,7 +14,7 @@ def make_k_mu_edges(boxsize, nmesh, kbins=None, mubins=1):
     if not kbins:
         k_bins = np.linspace(0, k_max, full_n.min() // 2 + 1)
     else:
-        kbins = np.linspace(0, k_max, kbins)
+        k_bins = np.linspace(0, k_max, kbins+1)
     
     mu_bins = np.linspace(0, 1, mubins + 1)
     return k_bins, mu_bins
@@ -71,7 +71,7 @@ def bandpower_from_field(field_fft, boxsize, kbins, mubins, nthread=None):
     kedges2 = (k_bins / dk) ** 2
     muedges2 = mu_bins**2
     Nk, Nmu = len(k_bins) - 1, len(mu_bins) - 1
-    k_binc = (k_bins[1:] + mu_bins[:-1]) * 0.5
+    k_binc = (k_bins[1:] + k_bins[:-1]) * 0.5
 
     if nthread is None:
         nthread = mp.cpu_count()
