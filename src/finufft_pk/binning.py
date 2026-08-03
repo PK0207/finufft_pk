@@ -1,7 +1,3 @@
-"""Thin wrapper around abacusnbody's k/mu binning, reused so FINUFFT fields are binned
-identically to abacus's own ``calc_power`` output.
-"""
-
 import numpy as np
 import multiprocessing as mp
 

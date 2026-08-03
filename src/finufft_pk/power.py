@@ -1,7 +1,8 @@
-import numpy as np
-from finufft import Plan
 import warnings
+import numpy as np
 from .binning import bandpower_from_field
+from dataclasses import dataclass
+from finufft import Plan
 
 
 class FinufftPk:
@@ -16,18 +17,17 @@ class FinufftPk:
         kwargs: finufft fft precision and spreading function arguments -- upsampfac, fftw, modeord, eps
         """
         # Necessarily real space
-        #!TODO: check that modeord = 0 (assert)
         kwargs.setdefault("modeord", 0)
         kwargs.setdefault("eps", 1e-4)
         kwargs.setdefault("upsampfac", 1.25)
         kwargs.setdefault("fftw", 0)
         if kwargs['modeord'] == 1:
-            raise AssertionError('Mode order 1 is not supported in finufft_pk. Please use modeord = 0.')
+            raise ValueError('Mode order 1 is not supported in finufft_pk. Please use modeord = 0.')
         # default num cpus is all in finufft plan
 
         dtype_dict = {np.complex64: np.float32, np.complex128: np.float64}
         if dtype not in dtype_dict.keys():
-            raise AssertionError(
+            raise ValueError(
                 f"Data type provided not part of list of valid inputs. Select one from: {dtype_dict.keys()}"
             )
         self.rdtype = dtype_dict[dtype]
@@ -129,13 +129,15 @@ class FinufftPk:
             k_binc, counts, weighted_counts, bandpower = bandpower_from_field(field, self.boxsize, kbins, mubins, nthread=None)
             return k_binc, counts, weighted_counts, bandpower
 
-# @dataclass
-# class FinufftPkResult:
-#     k_edges: np.typing.ArrayLike  # length N+1
-#     k_avg: np.typing.ArrayLike  # length N
-#     power: np.typing.ArrayLike  # length N
-#     boxsize: float
-#     # etc
+@dataclass
+class FinufftPkResult:
+    k_edges: np.typing.ArrayLike  # length N+1
+    k_avg: np.typing.ArrayLike  # length N
+    power: np.typing.ArrayLike  # length N
+    boxsize: float
+
+    def Nyquist(self):
+        return 2*np.pi/self.boxsize
 
 def powerspectrum_field(nmesh: tuple[int], boxsize: float, positions: tuple, weights: tuple = None, out: tuple = None, dtype=np.complex64, kbins:int=None, mubins:int=1, nthread:int=None, **kwargs):
     print('Initializing FINUFFT Plan')
