@@ -132,8 +132,6 @@ void kmu_binning_cpp(
 
 // The following code is used to bind the C++ functions to Python using nanobind.
 NB_MODULE(_binning, m) {
-    m.def("folded_sq", &folded_sq);
-    m.def("perp2_from_flat", &perp2_from_flat);
     m.def("kmu_binning_f32", &_kmu_binning<float>); 
     m.def("kmu_binning_f64", &_kmu_binning<double>);
     m.def("kmu_binning_cpp_f32", &kmu_binning_cpp<float>);
