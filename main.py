@@ -1,4 +1,4 @@
-from src.finufft_pk.power import FinufftPk, powerspectrum_field
+from finufft_pk.power import FinufftPk, powerspectrum_field
 import numpy as np
 import pickle
 
@@ -15,10 +15,14 @@ def main():
     powerspectrum = FinufftPk(nmesh=(ngen, ngen, ngen), boxsize=L)
     print("setting positions")
     powerspectrum.set_positions(positions=pos_red)
+    print("computing field")
+    field = powerspectrum.compute_field()
+    print("computing bandpowers")
+    k_binc, counts, weighted_counts, bandpowers = powerspectrum.compute_bandpower(field=field)
 
     # _, counts, weighted_counts, bandpowers = powerspectrum_field((ngen, ngen, ngen), L, pos_red)
-    # with open('test_power_calc.pkl', 'wb') as file:
-    #     pickle.dump((weighted_counts, counts, bandpowers), file)
+    with open('test_power_calc.pkl', 'wb') as file:
+        pickle.dump((weighted_counts, counts, bandpowers), file)
 
 
 if __name__ == "__main__":
