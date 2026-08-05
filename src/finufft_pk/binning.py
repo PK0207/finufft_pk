@@ -1,5 +1,6 @@
 import numpy as np
 import multiprocessing as mp
+from ._binning import kmu_binning_cpp_f32, kmu_binning_cpp_f64
 
 def make_k_mu_edges(boxsize, nmesh, kbins=None, mubins=1):
     """Build the same k/mu bin edges abacus's calc_power uses internally, once."""
@@ -84,7 +85,45 @@ def bandpower_from_field(field_fft, boxsize, kbins, mubins, nthread=None):
 
     counts         = sum(r[0] for r in results)
     weighted_counts = sum(r[1] for r in results)
+    for i in range(Nk):
+        for j in range(Nmu):
+            if counts[i, j] > 0:
+                weighted_counts[i, j] /= counts[i, j]
 
+    bandpower = (weighted_counts * boxsize**3).flatten()
+    return k_binc, counts, weighted_counts, bandpower
+
+def bandpower_from_field_cpp(field_fft, boxsize, kbins, mubins, nthread=None):
+    """Bin a (possibly half-plane) complex field into P(k) using abacus's binner.
+
+    ``field_fft`` must already be in ``rfftn``-style layout (DC mode at [0, 0, 0], last
+    axis of length nmesh//2 + 1) and normalized the way ``calc_pk_from_deltak`` expects
+    (delta_k, i.e. divided by N_particles and with the DC mode zeroed).
+    """
+    raw_power = np.abs(field_fft) ** 2 # Could put this in C++
+    nmesh = field_fft.shape
+    dk = 2 * np.pi / boxsize
+    k_bins, mu_bins = make_k_mu_edges(boxsize, nmesh, kbins, mubins)
+    kedges2 = (k_bins / dk) ** 2
+    muedges2 = mu_bins**2
+    Nk, Nmu = len(k_bins) - 1, len(mu_bins) - 1
+    k_binc = (k_bins[1:] + k_bins[:-1]) * 0.5
+
+    compute_dtype = raw_power.dtype
+    kedges2 = kedges2.astype(compute_dtype)
+    muedges2 = muedges2.astype(compute_dtype)
+    counts = np.zeros((Nk, Nmu), dtype=compute_dtype)
+    weighted_counts = np.zeros((Nk, Nmu), dtype=compute_dtype)
+
+    if compute_dtype==np.float32:
+        binning_func = kmu_binning_cpp_f32
+    elif compute_dtype == np.float64:
+        binning_func = kmu_binning_cpp_f64
+    else:
+        raise ValueError(f"Unsupported dtype {compute_dtype}, expected float32 or float64")
+
+    binning_func(kedges2, muedges2, raw_power, counts, weighted_counts)
+    
     for i in range(Nk):
         for j in range(Nmu):
             if counts[i, j] > 0:
