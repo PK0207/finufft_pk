@@ -1,6 +1,6 @@
 import warnings
 import numpy as np
-from .binning import bandpower_from_field
+from .binning import bandpower_from_field_cpp
 from dataclasses import dataclass
 from finufft import Plan
 
@@ -126,7 +126,7 @@ class FinufftPk:
                 raise AssertionError(
                     f"Shape of field {field.shape} must match plan shape {self._plan_shape()}"
                 )
-            k_binc, counts, weighted_counts, bandpower = bandpower_from_field(field, self.boxsize, kbins, mubins, nthread=None)
+            k_binc, counts, weighted_counts, bandpower = bandpower_from_field_cpp(field, self.boxsize, kbins, mubins, nthread=nthread)
             return k_binc, counts, weighted_counts, bandpower
 
 @dataclass
