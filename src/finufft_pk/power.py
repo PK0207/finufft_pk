@@ -47,15 +47,6 @@ class FinufftPk:
             **kwargs,
         )
 
-    # IN progress: original plan was get htop output but what if windows?
-    # for now, just CPU-1
-    # def _calc_num_cpu(nmesh, ):
-    #     #Roughly estimate a good number of cpus
-    #     #Each data points is 32 bits
-    #     #Get L2 cache storage size
-    #     htop_output = subprocess.run('htop')
-    #     return num_cpu
-
     def _plan_shape(self):
         n_modes = np.atleast_1d(self.nmesh)
         if n_modes.ndim != 1 or not (1 <= len(n_modes) <= 3):
