@@ -1,7 +1,8 @@
-from src.finufft_pk.power import FinufftPk, powerspectrum_field
+from finufft_pk.power import FinufftPk, powerspectrum_field
 import numpy as np
 import pickle
-
+import time
+from abacusnbody.analysis.power_spectrum import get_k_mu_edges, calc_pk_from_deltak
 def main():
     fname = '/mnt/home/pkottapalli/ceph/positions_grid_512_nbar1_P01.pkl'
     with open(fname, 'rb') as f:
@@ -12,13 +13,17 @@ def main():
     L = pos_dict['L']
 
     print('Initializing FINUFFT Plan')
-    powerspectrum = FinufftPk(nmesh=(ngen, ngen, ngen), boxsize=L)
+    powerspectrum = FinufftPk(nmesh=(ngen, ngen, ngen), boxsize=L, dtype=np.complex64)
     print("setting positions")
     powerspectrum.set_positions(positions=pos_red)
+    print("computing field")
+    field = powerspectrum.compute_field()
+    print("computing bandpowers")
+    k_binc, counts, weighted_counts, bandpowers = powerspectrum.compute_bandpower(field=field)
 
     # _, counts, weighted_counts, bandpowers = powerspectrum_field((ngen, ngen, ngen), L, pos_red)
-    # with open('test_power_calc.pkl', 'wb') as file:
-    #     pickle.dump((weighted_counts, counts, bandpowers), file)
+    with open('test_power_calc.pkl', 'wb') as file:
+        pickle.dump((weighted_counts, counts, bandpowers), file)
 
 
 if __name__ == "__main__":

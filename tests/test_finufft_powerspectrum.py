@@ -12,12 +12,12 @@ def _make_catalog(rng, boxsize=64.0, n=2000):
 
 
 def test_rejects_unsupported_dtype():
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         FinufftPk(nmesh=(16, 16, 16), boxsize=64.0, dtype=np.float32)
 
 
 def test_rejects_modeord_1():
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         FinufftPk(nmesh=(16, 16, 16), boxsize=64.0, modeord=1)
 
 
@@ -55,7 +55,7 @@ def test_bandpower_matches_stored_abacus_power_pointwise(abacus_reference):
     """Bin-for-bin comparison against the stored abacus solution (not another FINUFFT call),
     using the same number of k bins so the two are directly comparable."""
     meta = abacus_reference["meta"]
-    pos = abacus_reference["pos"].T.astype(np.float32)  # stored as (N, 3); this class wants (D, N)
+    pos = np.ascontiguousarray(abacus_reference["pos"].T, dtype=np.float32)  # stored as (N, 3); this class wants (D, N)
     N = pos.shape[-1]
     L = meta["L"]
 

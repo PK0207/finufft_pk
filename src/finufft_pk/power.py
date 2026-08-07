@@ -1,6 +1,6 @@
 import warnings
 import numpy as np
-from .binning import bandpower_from_field
+from .binning import bandpower_from_field_cpp
 from dataclasses import dataclass
 from finufft import Plan
 
@@ -24,6 +24,7 @@ class FinufftPk:
         if kwargs['modeord'] == 1:
             raise ValueError('Mode order 1 is not supported in finufft_pk. Please use modeord = 0.')
         # default num cpus is all in finufft plan
+        kwargs.setdefault("nthreads", 0)
 
         dtype_dict = {np.complex64: np.float32, np.complex128: np.float64}
         if dtype not in dtype_dict.keys():
@@ -38,6 +39,7 @@ class FinufftPk:
 
         # construct FINUFFT Plan
         #!TODO: Save FFT Wisdom after Plan is made
+        #!TODO: have to feed in nthreads up here actually, can't retrieve from plan object
         self.plan = Plan(
             nufft_type=1,
             n_modes_or_dim=self._plan_shape(),
@@ -46,15 +48,6 @@ class FinufftPk:
             dtype=dtype,
             **kwargs,
         )
-
-    # IN progress: original plan was get htop output but what if windows?
-    # for now, just CPU-1
-    # def _calc_num_cpu(nmesh, ):
-    #     #Roughly estimate a good number of cpus
-    #     #Each data points is 32 bits
-    #     #Get L2 cache storage size
-    #     htop_output = subprocess.run('htop')
-    #     return num_cpu
 
     def _plan_shape(self):
         n_modes = np.atleast_1d(self.nmesh)
@@ -126,7 +119,7 @@ class FinufftPk:
                 raise AssertionError(
                     f"Shape of field {field.shape} must match plan shape {self._plan_shape()}"
                 )
-            k_binc, counts, weighted_counts, bandpower = bandpower_from_field(field, self.boxsize, kbins, mubins, nthread=None)
+            k_binc, counts, weighted_counts, bandpower = bandpower_from_field_cpp(field, self.boxsize, kbins, mubins, nthread=nthread)
             return k_binc, counts, weighted_counts, bandpower
 
 @dataclass

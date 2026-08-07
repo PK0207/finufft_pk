@@ -1,12 +1,22 @@
+[build-system]
+requires = ["scikit-build-core", "nanobind"]
+build-backend = "scikit_build_core.build"
+
 [project]
 name = "finufft-pk"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11.11"
-dependencies = []
+dependencies = ["finufft", "numpy"]
 
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
 ]
+
+[tool.scikit-build]
+wheel.packages = ["cpp_testing", "src/finufft_pk"]
+
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "CMakeLists.txt" }, { file = "cpp_testing/**/*.cpp" }, { file = "src/finufft_pk/**/*.cpp" }]
