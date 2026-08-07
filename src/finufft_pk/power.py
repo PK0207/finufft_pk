@@ -6,7 +6,7 @@ from finufft import Plan
 
 
 class FinufftPk:
-    def __init__(self, nmesh: tuple[int], boxsize: float, dtype=np.complex64, **kwargs):
+    def __init__(self, nmesh: tuple[int], boxsize: float, dtype=np.complex64, cufinufft=False, **kwargs):
         """
         Class inputs (N & M convention inherited from finufft):
         positions: Input position grid, array of shape (D,N)
@@ -36,6 +36,7 @@ class FinufftPk:
 
         self.nmesh = nmesh
         self.boxsize = boxsize
+        self.cufinufft = cufinufft
 
         # construct FINUFFT Plan
         #!TODO: Save FFT Wisdom after Plan is made
@@ -122,6 +123,10 @@ class FinufftPk:
                 )
             counts = self.counts if reuse_counts and hasattr(self, 'counts') else None
             k_binc, counts, weighted_counts, bandpower = bandpower_from_field_cpp(field, self.boxsize, kbins, mubins, nthread=nthread, counts=counts)
+            # cupy version
+            # - create a nmesh^3 array of the |k| amplitude
+            # - use cp.digitize to find the indicies in the k-edges array
+            # - update the counts & weighted counts according to the digitize result
             self.counts = counts  # do we always save counts?? probably yes
             return k_binc, counts, weighted_counts, bandpower
 
