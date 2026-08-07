@@ -136,6 +136,7 @@ class FinufftPkResult:
         return 2*np.pi/self.boxsize
 
 def powerspectrum_field(nmesh: tuple[int], boxsize: float, positions: tuple, weights: tuple = None, out: tuple = None, dtype=np.complex64, kbins:int=None, mubins:int=1, nthread:int=None, **kwargs):
+    # LHG: should this default to FFTW_ESTIMATE?
     print('Initializing FINUFFT Plan')
     plan = FinufftPk(nmesh=nmesh, boxsize=boxsize, dtype=dtype, **kwargs)
     print("setting positions")
