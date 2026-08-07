@@ -94,7 +94,7 @@ def bandpower_from_field(field_fft, boxsize, kbins, mubins, nthread=None):
     bandpower = (weighted_counts * boxsize**3).flatten()
     return k_binc, counts, weighted_counts, bandpower
 
-def bandpower_from_field_cpp(field_fft, boxsize, kbins, mubins, nthread=None):
+def bandpower_from_field_cpp(field_fft, boxsize, kbins, mubins, nthread=None, counts=None):
     """Bin a (possibly half-plane) complex field into P(k) using abacus's binner.
 
     ``field_fft`` must already be in ``rfftn``-style layout (DC mode at [0, 0, 0], last
@@ -110,10 +110,13 @@ def bandpower_from_field_cpp(field_fft, boxsize, kbins, mubins, nthread=None):
     Nk, Nmu = len(k_bins) - 1, len(mu_bins) - 1
     k_binc = (k_bins[1:] + k_bins[:-1]) * 0.5
 
+    reuse_counts = counts is not None
+
     compute_dtype = raw_power.dtype
     kedges2 = kedges2.astype(compute_dtype)
     muedges2 = muedges2.astype(compute_dtype)
-    counts = np.zeros((Nk, Nmu), dtype=compute_dtype)
+    if not reuse_counts:
+        counts = np.zeros((Nk, Nmu), dtype=compute_dtype)
     weighted_counts = np.zeros((Nk, Nmu), dtype=compute_dtype)
 
     if compute_dtype==np.float32:
@@ -125,8 +128,9 @@ def bandpower_from_field_cpp(field_fft, boxsize, kbins, mubins, nthread=None):
     if nthread is None:
         nthread = os.cpu_count()
 
-    binning_func(kedges2, muedges2, raw_power, counts, weighted_counts, nthread)
+    binning_func(kedges2, muedges2, raw_power, counts, weighted_counts, nthread, reuse_counts)
     
+    # LHG: move this loop to C++?
     for i in range(Nk):
         for j in range(Nmu):
             if counts[i, j] > 0:

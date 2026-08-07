@@ -100,6 +100,9 @@ void kmu_binning_cpp(
     T* counts_ptr = counts.data();
     T* weighted_counts_ptr = weighted_counts.data();
 
+    if (nthread < 1)
+        nthread = omp_get_max_threads();
+
     if (do_count){
         // TODO: move to function
         #pragma omp parallel for schedule(static) num_threads(nthread) reduction(+:counts_ptr[:N_kbin*N_mubin]) reduction(+:weighted_counts_ptr[:N_kbin*N_mubin])
@@ -131,4 +134,5 @@ void kmu_binning_cpp(
 NB_MODULE(_binning, m) {
     m.def("kmu_binning_cpp_f32", &kmu_binning_cpp<float>);
     m.def("kmu_binning_cpp_f64", &kmu_binning_cpp<double>);
+    m.def("omp_get_max_threads", &omp_get_max_threads);
 }

@@ -97,6 +97,7 @@ class FinufftPk:
                             f"Shape of weights {self._w_shape} must match number of points ({self._Npts},)"
                         )
         else:
+            # LHG: move to C++ (not high priority)
             weights = np.ascontiguousarray(
                 np.ones(shape=(self._Npts)), dtype=self.cdtype
             )
@@ -114,12 +115,14 @@ class FinufftPk:
         field = self.plan.execute(weights * self._realify_weights, out=out)
         return field
 
-    def compute_bandpower(self, field, kbins:int=None, mubins:int=1, nthread:int=None):
+    def compute_bandpower(self, field, kbins:int=None, mubins:int=1, nthread:int=None, reuse_counts = False):
             if field.shape != self._plan_shape():
                 raise AssertionError(
                     f"Shape of field {field.shape} must match plan shape {self._plan_shape()}"
                 )
-            k_binc, counts, weighted_counts, bandpower = bandpower_from_field_cpp(field, self.boxsize, kbins, mubins, nthread=nthread)
+            counts = self.counts if reuse_counts and hasattr(self, 'counts') else None
+            k_binc, counts, weighted_counts, bandpower = bandpower_from_field_cpp(field, self.boxsize, kbins, mubins, nthread=nthread, counts=counts)
+            self.counts = counts  # do we always save counts?? probably yes
             return k_binc, counts, weighted_counts, bandpower
 
 @dataclass
