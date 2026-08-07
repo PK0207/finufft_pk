@@ -27,7 +27,7 @@ long long perp2_from_flat(long long flat, const std::vector<int64_t>& nmesh) {
     return total;
 }
 
-template <typename T> //Allows for both float and double versions of the function to be compiled
+template <typename T, bool do_count> //Allows for both float and double versions of the function to be compiled
 void bin_column(
     long long perp2, long long len_z,
     const T* kedges2, long long n_kedges2,
@@ -60,14 +60,17 @@ void bin_column(
         while (mu2 > muedges2[bmu+1]) {
             bmu += 1;
         }
-    int weight;
-    if (i == 0) {
-        weight = 1;
-    } else {
-        weight = 2;
-    }
-    counts[bk * Nmu + bmu] += weight; //mutated in place
-    weighted_counts[bk * Nmu + bmu] += weight * raw_power_col[i];
+
+        int weight;
+        if (i == 0) {
+            weight = 1;
+        } else {
+            weight = 2;
+        }
+        if constexpr (do_count)
+            counts[bk * Nmu + bmu] += weight; //mutated in place  // LHG: try commenting this out?
+        else
+            weighted_counts[bk * Nmu + bmu] += weight * raw_power_col[i];
     }
 }
 
@@ -79,7 +82,8 @@ void kmu_binning_cpp(
     nb::ndarray<const T, nb::c_contig, nb::device::cpu> raw_power,  // shape is (*fold_shape, len_z)
     nb::ndarray<T, nb::ndim<2>, nb::c_contig, nb::device::cpu> counts,
     nb::ndarray<T, nb::ndim<2>, nb::c_contig, nb::device::cpu> weighted_counts,
-    int nthread
+    int nthread,
+    bool do_count
 ){
     // loop over all columns of the field and bin each column
     size_t ndim = raw_power.ndim();
@@ -96,23 +100,31 @@ void kmu_binning_cpp(
     T* counts_ptr = counts.data();
     T* weighted_counts_ptr = weighted_counts.data();
 
-    #pragma omp parallel for schedule(static) num_threads(nthread) reduction(+:counts_ptr[:N_kbin*N_mubin]) reduction(+:weighted_counts_ptr[:N_kbin*N_mubin])
-    for (long long flat = 0; flat < perp_volume; ++flat){
-        long long perp2 = perp2_from_flat(flat, nmesh);
-        const T* col_ptr = raw_power_ptr + flat * len_z; // this column's len_z contiguous values
+    if (do_count){
+        // TODO: move to function
+        #pragma omp parallel for schedule(static) num_threads(nthread) reduction(+:counts_ptr[:N_kbin*N_mubin]) reduction(+:weighted_counts_ptr[:N_kbin*N_mubin])
+        for (long long flat = 0; flat < perp_volume; ++flat){
+            long long perp2 = perp2_from_flat(flat, nmesh);
+            const T* col_ptr = raw_power_ptr + flat * len_z; // this column's len_z contiguous values
 
-        bin_column(
-            perp2,
-            len_z,
-            kedges2.data(),
-            kedges2.shape(0),
-            muedges2.data(),
-            col_ptr,
-            counts_ptr, 
-            weighted_counts_ptr,
-            counts.shape(1)
-        );
+            bin_column<true>(
+                perp2,
+                len_z,
+                kedges2.data(),
+                kedges2.shape(0),
+                muedges2.data(),
+                col_ptr,
+                counts_ptr, 
+                weighted_counts_ptr,
+                counts.shape(1)
+            );
+        }
+    } else {
+        // call same function
+        bin_column<false>()
     }
+
+
 }
 
 // bind the C++ functions to Python using nanobind.
