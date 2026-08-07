@@ -24,6 +24,7 @@ class FinufftPk:
         if kwargs['modeord'] == 1:
             raise ValueError('Mode order 1 is not supported in finufft_pk. Please use modeord = 0.')
         # default num cpus is all in finufft plan
+        kwargs.setdefault("nthreads", 0)
 
         dtype_dict = {np.complex64: np.float32, np.complex128: np.float64}
         if dtype not in dtype_dict.keys():
@@ -38,6 +39,7 @@ class FinufftPk:
 
         # construct FINUFFT Plan
         #!TODO: Save FFT Wisdom after Plan is made
+        #!TODO: have to feed in nthreads up here actually, can't retrieve from plan object
         self.plan = Plan(
             nufft_type=1,
             n_modes_or_dim=self._plan_shape(),

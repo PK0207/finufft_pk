@@ -78,7 +78,8 @@ void kmu_binning_cpp(
     nb::ndarray<const T, nb::ndim<1>, nb::c_contig, nb::device::cpu> muedges2,
     nb::ndarray<const T, nb::c_contig, nb::device::cpu> raw_power,  // shape is (*fold_shape, len_z)
     nb::ndarray<T, nb::ndim<2>, nb::c_contig, nb::device::cpu> counts,
-    nb::ndarray<T, nb::ndim<2>, nb::c_contig, nb::device::cpu> weighted_counts
+    nb::ndarray<T, nb::ndim<2>, nb::c_contig, nb::device::cpu> weighted_counts,
+    int nthread
 ){
     // loop over all columns of the field and bin each column
     size_t ndim = raw_power.ndim();
@@ -95,8 +96,7 @@ void kmu_binning_cpp(
     T* counts_ptr = counts.data();
     T* weighted_counts_ptr = weighted_counts.data();
 
-    #pragma omp parallel for schedule(static) \
-    reduction(+:counts_ptr[:N_kbin*N_mubin]) reduction(+:weighted_counts_ptr[:N_kbin*N_mubin])
+    #pragma omp parallel for schedule(static) num_threads(nthread) reduction(+:counts_ptr[:N_kbin*N_mubin]) reduction(+:weighted_counts_ptr[:N_kbin*N_mubin])
     for (long long flat = 0; flat < perp_volume; ++flat){
         long long perp2 = perp2_from_flat(flat, nmesh);
         const T* col_ptr = raw_power_ptr + flat * len_z; // this column's len_z contiguous values
@@ -115,7 +115,7 @@ void kmu_binning_cpp(
     }
 }
 
-// The following code is used to bind the C++ functions to Python using nanobind.
+// bind the C++ functions to Python using nanobind.
 NB_MODULE(_binning, m) {
     m.def("kmu_binning_cpp_f32", &kmu_binning_cpp<float>);
     m.def("kmu_binning_cpp_f64", &kmu_binning_cpp<double>);

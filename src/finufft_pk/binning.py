@@ -1,5 +1,6 @@
 import numpy as np
 import multiprocessing as mp
+import os
 from ._binning import kmu_binning_cpp_f32, kmu_binning_cpp_f64
 
 def make_k_mu_edges(boxsize, nmesh, kbins=None, mubins=1):
@@ -121,8 +122,10 @@ def bandpower_from_field_cpp(field_fft, boxsize, kbins, mubins, nthread=None):
         binning_func = kmu_binning_cpp_f64
     else:
         raise ValueError(f"Unsupported dtype {compute_dtype}, expected float32 or float64")
+    if nthread is None:
+        nthread = os.cpu_count()
 
-    binning_func(kedges2, muedges2, raw_power, counts, weighted_counts)
+    binning_func(kedges2, muedges2, raw_power, counts, weighted_counts, nthread)
     
     for i in range(Nk):
         for j in range(Nmu):
