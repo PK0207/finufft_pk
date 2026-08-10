@@ -3,7 +3,7 @@ import numpy as np
 from .binning import bandpower_from_field_cpp
 from dataclasses import dataclass
 from finufft import Plan
-from ._helper_functions import rescale_points_f32, rescale_points_f64, realify_weights_f32, realify_weights_f64
+from ._helper_functions import *
 
 
 class FinufftPk:
@@ -40,7 +40,7 @@ class FinufftPk:
         self.boxsize = boxsize
 
         # construct FINUFFT Plan
-        #!TODO: Save FFT Wisdom after Plan is made
+        # unable to save Plan after it's made
         self.plan = Plan(
             nufft_type=1,
             n_modes_or_dim=self._plan_shape(),
@@ -49,6 +49,7 @@ class FinufftPk:
             dtype=dtype,
             **kwargs,
         )
+        self.result = FinufftPkResult(boxsize=self.boxsize, nmesh=self.nmesh, finufft_kwargs=kwargs)
 
     def _plan_shape(self):
         n_modes = np.atleast_1d(self.nmesh)
@@ -89,8 +90,6 @@ class FinufftPk:
                 rescale_points_f64(positions, self.boxsize)
         # FINUFFT asks for C arrays, if underlying data is not (dim, N) FINUFFT makes a copy
         self.pos_shape = positions.shape
-        # shift = n_modes[-1] // 2  # Take half of the last axis's grid size
-        # self._realify_weights = np.exp(-1j * shift * positions[-1, :]).astype(self.cdtype)
         plan_last = self._plan_shape()[-1]  # = nmesh // 2 = 256
         shift = plan_last // 2              # = 128
         self._Npts = self.pos_shape[-1]
@@ -100,6 +99,7 @@ class FinufftPk:
         elif self.rdtype == np.float64:
             realify_weights_f64(positions[-1, :], shift, self._realify_weights)
         self.plan.setpts(*positions)
+        self.result.kwargs = {'inplace':inplace}
 
     def compute_field(self, weights: tuple = None, out: tuple = None):
         # set weights
@@ -108,6 +108,7 @@ class FinufftPk:
                         raise AssertionError(
                             f"Shape of weights {weights.shape} must match number of points ({self._Npts},)"
                         )
+            self.result.kwargs['input_weights'] = weights
         else:
             weights = np.ascontiguousarray(
                 np.ones(shape=(self._Npts)), dtype=self.cdtype
@@ -120,10 +121,12 @@ class FinufftPk:
                 raise AssertionError(
                     f"Shape of output {out.shape} and meshgrid {self._plan_shape()} must match"
                 )
+            self.result.kwargs['out_array'] = out
         else:
             out = np.zeros(self._plan_shape(), dtype=self.cdtype)
 
         field = self.plan.execute(weights * self._realify_weights, out=out)
+        self.result.field = field
         return field
 
     def compute_bandpower(self, field, kbins:int=None, mubins:int=1, nthread:int=None):
@@ -136,17 +139,31 @@ class FinufftPk:
                     f"Shape of field {field.shape} must match plan shape {self._plan_shape()}"
                 )
             k_binc, counts, weighted_counts, bandpower = bandpower_from_field_cpp(field, self.boxsize, kbins, mubins, nthread=nthread_bandpower)
+            self.result.k_avg = k_binc
+            self.result.counts = counts
+            self.result.weighted_counts = weighted_counts
+            self.result.power = bandpower
+            if not kbins:
+                self.result.kwargs['kbins'] = min(self.nmesh) // 2 + 1
+            else:
+                self.result.kwargs['kbins'] = kbins
+            self.result.kwargs['mubins'] = mubins
             return k_binc, counts, weighted_counts, bandpower
 
 @dataclass
 class FinufftPkResult:
-    k_edges: np.typing.ArrayLike  # length N+1
-    k_avg: np.typing.ArrayLike  # length N
-    power: np.typing.ArrayLike  # length N
-    boxsize: float
+    field: np.typing.ArrayLike | None = None  # shape (N,N, N//2+1)
+    power: np.typing.ArrayLike | None = None  # length N
+    boxsize: float | None = None
+    counts: np.typing.ArrayLike | None = None  # length N
+    weighted_counts: np.typing.ArrayLike | None = None  # length N
+    nmesh: tuple | None = None
+    finufft_kwargs: dict | None = None
+    k_avg: np.typing.ArrayLike | None = None  # length N
+    kwargs: dict | None = None  # nthreads, dtype, kbins, mubins, inplace
 
     def Nyquist(self):
-        return 2*np.pi/self.boxsize
+        return np.pi * min(self.nmesh) / self.boxsize
 
 def powerspectrum_field(nmesh: tuple[int], boxsize: float, positions: tuple, weights: tuple = None, out: tuple = None, dtype=np.complex64, kbins:int=None, mubins:int=1, nthread:int=None, **kwargs):
     print('Initializing FINUFFT Plan')
@@ -157,6 +174,6 @@ def powerspectrum_field(nmesh: tuple[int], boxsize: float, positions: tuple, wei
     print("computing field")
     field = plan.compute_field(weights, out)
     print("computing bandpowers")
-    powerspectrum = plan.compute_bandpower(field, kbins, mubins, nthread)
+    plan.compute_bandpower(field, kbins, mubins, nthread)
 
-    return powerspectrum #Change to FINUFFT data class
+    return plan.result #Change to FINUFFT data class
