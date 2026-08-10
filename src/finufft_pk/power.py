@@ -3,6 +3,7 @@ import numpy as np
 from .binning import bandpower_from_field_cpp
 from dataclasses import dataclass
 from finufft import Plan
+from ._helper_functions import rescale_points_f32, rescale_points_f64, realify_weights_f32, realify_weights_f64
 
 
 class FinufftPk:
@@ -25,6 +26,7 @@ class FinufftPk:
             raise ValueError('Mode order 1 is not supported in finufft_pk. Please use modeord = 0.')
         # default num cpus is all in finufft plan
         kwargs.setdefault("nthreads", 0)
+        self._nthreads = kwargs['nthreads']
 
         dtype_dict = {np.complex64: np.float32, np.complex128: np.float64}
         if dtype not in dtype_dict.keys():
@@ -39,7 +41,6 @@ class FinufftPk:
 
         # construct FINUFFT Plan
         #!TODO: Save FFT Wisdom after Plan is made
-        #!TODO: have to feed in nthreads up here actually, can't retrieve from plan object
         self.plan = Plan(
             nufft_type=1,
             n_modes_or_dim=self._plan_shape(),
@@ -74,19 +75,30 @@ class FinufftPk:
                 warnings.warn(f"Positions array has dtype {positions.dtype}, which does not match the expected dtype {self.rdtype}. This will affect the performance of finufft.", UserWarning)
             elif inplace:
                 raise TypeError(f"Positions array has dtype {positions.dtype}, which does not match the expected dtype {self.rdtype}.")
-        
+        # use a C++ function
         if inplace:
-            positions*= 2*np.pi/self.boxsize
+            if self.rdtype == np.float32:
+                rescale_points_f32(positions, self.boxsize)
+            elif self.rdtype == np.float64:
+                rescale_points_f64(positions, self.boxsize)
         else:
-            positions = positions * (2 * np.pi / self.boxsize)
+            positions = np.copy(positions)
+            if self.rdtype == np.float32:
+                rescale_points_f32(positions, self.boxsize)
+            elif self.rdtype == np.float64:
+                rescale_points_f64(positions, self.boxsize)
+        # FINUFFT asks for C arrays, if underlying data is not (dim, N) FINUFFT makes a copy
         self.pos_shape = positions.shape
         # shift = n_modes[-1] // 2  # Take half of the last axis's grid size
         # self._realify_weights = np.exp(-1j * shift * positions[-1, :]).astype(self.cdtype)
         plan_last = self._plan_shape()[-1]  # = nmesh // 2 = 256
         shift = plan_last // 2              # = 128
-        self._realify_weights = np.exp(-1j * shift * positions[-1, :]).astype(self.cdtype)
-        self._Npts = positions.shape[-1]
-        # FINUFFT asks for C arrays, if underlying data is not (dim, N) FINUFFT makes a copy
+        self._Npts = self.pos_shape[-1]
+        self._realify_weights = np.empty(self._Npts, dtype=self.cdtype)
+        if self.rdtype == np.float32:
+            realify_weights_f32(positions[-1, :], shift, self._realify_weights)
+        elif self.rdtype == np.float64:
+            realify_weights_f64(positions[-1, :], shift, self._realify_weights)
         self.plan.setpts(*positions)
 
     def compute_field(self, weights: tuple = None, out: tuple = None):
@@ -94,7 +106,7 @@ class FinufftPk:
         if weights is not None:
             if not weights.shape == (self._Npts,):
                         raise AssertionError(
-                            f"Shape of weights {self._w_shape} must match number of points ({self._Npts},)"
+                            f"Shape of weights {weights.shape} must match number of points ({self._Npts},)"
                         )
         else:
             weights = np.ascontiguousarray(
@@ -115,11 +127,15 @@ class FinufftPk:
         return field
 
     def compute_bandpower(self, field, kbins:int=None, mubins:int=1, nthread:int=None):
+            if nthread:
+                nthread_bandpower = nthread
+            else:
+                nthread_bandpower = self._nthreads
             if field.shape != self._plan_shape():
                 raise AssertionError(
                     f"Shape of field {field.shape} must match plan shape {self._plan_shape()}"
                 )
-            k_binc, counts, weighted_counts, bandpower = bandpower_from_field_cpp(field, self.boxsize, kbins, mubins, nthread=nthread)
+            k_binc, counts, weighted_counts, bandpower = bandpower_from_field_cpp(field, self.boxsize, kbins, mubins, nthread=nthread_bandpower)
             return k_binc, counts, weighted_counts, bandpower
 
 @dataclass
@@ -134,6 +150,7 @@ class FinufftPkResult:
 
 def powerspectrum_field(nmesh: tuple[int], boxsize: float, positions: tuple, weights: tuple = None, out: tuple = None, dtype=np.complex64, kbins:int=None, mubins:int=1, nthread:int=None, **kwargs):
     print('Initializing FINUFFT Plan')
+    kwargs.setdefault("fftw", 64)
     plan = FinufftPk(nmesh=nmesh, boxsize=boxsize, dtype=dtype, **kwargs)
     print("setting positions")
     plan.set_positions(positions=positions)
