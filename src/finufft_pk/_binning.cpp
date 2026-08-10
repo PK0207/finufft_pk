@@ -60,15 +60,15 @@ void bin_column(
         while (mu2 > muedges2[bmu+1]) {
             bmu += 1;
         }
-    int weight;
-    if (i == 0) {
-        weight = 1;
-    } else {
-        weight = 2;
-    }
-    counts[bk * Nmu + bmu] += weight; //mutated in place
-    weighted_counts[bk * Nmu + bmu] += weight * raw_power_col[i];
-    }
+        int weight;
+        if (i == 0) {
+            weight = 1;
+        } else {
+            weight = 2;
+        }
+        counts[bk * Nmu + bmu] += weight; //mutated in place
+        weighted_counts[bk * Nmu + bmu] += weight * raw_power_col[i];
+        }
 }
 
 // function reads in numpy arays using nanobind ndarray and passes it to binning function
@@ -95,6 +95,16 @@ void kmu_binning_cpp(
     const T* raw_power_ptr = raw_power.data();
     T* counts_ptr = counts.data();
     T* weighted_counts_ptr = weighted_counts.data();
+
+    if (nthread <= 0) {
+        nthread = omp_get_max_threads();
+    }
+    else if (nthread > omp_get_max_threads()) {
+        nthread = omp_get_max_threads();
+    }
+    else {
+        nthread = nthread;
+    }
 
     #pragma omp parallel for schedule(static) num_threads(nthread) reduction(+:counts_ptr[:N_kbin*N_mubin]) reduction(+:weighted_counts_ptr[:N_kbin*N_mubin])
     for (long long flat = 0; flat < perp_volume; ++flat){
