@@ -53,7 +53,7 @@ def _kmu_binning(chunk_idx, raw_power, fold_shape, len_z, kedges2, muedges2, Nk,
             weighted_counts[bk, bmu] += weight * raw_power[perp_idx + (k,)]
     return counts, weighted_counts
 
-def bandpower_from_field(field_fft, boxsize, kbins, mubins, nthread=None):
+def bandpower_from_field(field_fft, boxsize, kbins, mubins, nthread:int=None):
     """Bin a (possibly half-plane) complex field into P(k) using abacus's binner.
 
     ``field_fft`` must already be in ``rfftn``-style layout (DC mode at [0, 0, 0], last
@@ -94,7 +94,7 @@ def bandpower_from_field(field_fft, boxsize, kbins, mubins, nthread=None):
     bandpower = (weighted_counts * boxsize**3).flatten()
     return k_binc, counts, weighted_counts, bandpower
 
-def bandpower_from_field_cpp(field_fft, boxsize, kbins, mubins, nthread=None):
+def bandpower_from_field_cpp(field_fft, boxsize, kbins, mubins, nthread:int=None):
     """Bin a (possibly half-plane) complex field into P(k) using abacus's binner.
 
     ``field_fft`` must already be in ``rfftn``-style layout (DC mode at [0, 0, 0], last
@@ -122,9 +122,7 @@ def bandpower_from_field_cpp(field_fft, boxsize, kbins, mubins, nthread=None):
         binning_func = kmu_binning_cpp_f64
     else:
         raise ValueError(f"Unsupported dtype {compute_dtype}, expected float32 or float64")
-    if nthread is None:
-        nthread = os.cpu_count()
-
+    
     binning_func(kedges2, muedges2, raw_power, counts, weighted_counts, nthread)
     
     for i in range(Nk):
