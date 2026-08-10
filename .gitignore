@@ -5,6 +5,7 @@ build/
 dist/
 wheels/
 *.egg-info
-
+*.pkl
+benchmark_binning.py
 # Virtual environments
 .venv
