@@ -18,10 +18,15 @@ def make_k_mu_edges(boxsize, nmesh, kbins=None, mubins=1):
     return k_bins, mu_bins
 
 def folded_sq(idx, n):
+            """Squared centered mode index for a CMCL-ordered axis of length n."""
             # CMCL order is already centered (idx=0 -> k=-N/2), so no wraparound needed
             return (idx - n // 2) ** 2
 
 def _kmu_binning(chunk_idx, raw_power, fold_shape, len_z, kedges2, muedges2, Nk, Nmu):
+    """
+    Accumulate counts and weighted power into (k, mu) bins for a chunk
+    of perpendicular-axis indices; run as a worker in the multiprocessing pool.
+    """
     #Code inherited and refactored from abacus
     counts = np.zeros((Nk, Nmu))
     weighted_counts = np.zeros((Nk, Nmu))
@@ -54,11 +59,34 @@ def _kmu_binning(chunk_idx, raw_power, fold_shape, len_z, kedges2, muedges2, Nk,
     return counts, weighted_counts
 
 def bandpower_from_field(field_fft, boxsize, kbins, mubins, nthread:int=None):
-    """Bin a (possibly half-plane) complex field into P(k) using abacus's binner.
+    """
+    Bin a half-plane complex field into P(k) using a pure-Python/multiprocessing
+    implementation (see ``bandpower_from_field_cpp`` for the C++-accelerated version).
 
-    ``field_fft`` must already be in ``rfftn``-style layout (DC mode at [0, 0, 0], last
-    axis of length nmesh//2 + 1) and normalized the way ``calc_pk_from_deltak`` expects
-    (delta_k, i.e. divided by N_particles and with the DC mode zeroed).
+    field_fft: complex ndarray, shape (n0, ..., n_{d-2}, nz//2 + 1)
+        Field in ``rfftn``-style layout: DC mode at [0, 0, 0], leading axes
+        in CMCL (centered) order, last axis half-length (real-to-complex).
+        Must already be normalized as delta_k (divided by N_particles, DC
+        mode zeroed) the way ``calc_pk_from_deltak`` expects.
+    boxsize: float
+        Physical size of the box the field was computed in.
+    kbins: int or None
+        Number of k bins; if None, defaults to min(full_nmesh) // 2 + 1.
+    mubins: int
+        Number of mu (angle-cosine) bins.
+    nthread: int or None
+        Number of worker processes; defaults to mp.cpu_count().
+
+    Returns
+    -------
+    k_binc: ndarray, shape (kbins,)
+        Bin-center k values.
+    counts: ndarray, shape (kbins, mubins)
+        Mode counts per (k, mu) bin.
+    weighted_counts: ndarray, shape (kbins, mubins)
+        Mean power per (k, mu) bin.
+    bandpower: ndarray, shape (kbins * mubins,)
+        Flattened band power, ``weighted_counts * boxsize**3``.
     """
     raw_power = np.abs(field_fft) ** 2
     nmesh = field_fft.shape
@@ -95,11 +123,35 @@ def bandpower_from_field(field_fft, boxsize, kbins, mubins, nthread:int=None):
     return k_binc, counts, weighted_counts, bandpower
 
 def bandpower_from_field_cpp(field_fft, boxsize, kbins, mubins, nthread:int=None):
-    """Bin a (possibly half-plane) complex field into P(k) using abacus's binner.
+    """
+    Bin a half-plane complex field into P(k), dispatching the inner
+    (k, mu)-binning loop to a C++ implementation (f32/f64) for speed.
 
-    ``field_fft`` must already be in ``rfftn``-style layout (DC mode at [0, 0, 0], last
-    axis of length nmesh//2 + 1) and normalized the way ``calc_pk_from_deltak`` expects
-    (delta_k, i.e. divided by N_particles and with the DC mode zeroed).
+    field_fft: complex ndarray, shape (n0, ..., n_{d-2}, nz//2 + 1)
+        Field in ``rfftn``-style layout: DC mode at [0, 0, 0], leading axes
+        in CMCL (centered) order, last axis half-length (real-to-complex).
+        Must already be normalized as delta_k (divided by N_particles, DC
+        mode zeroed) the way ``calc_pk_from_deltak`` expects. dtype must be
+        complex64 or complex128 so the derived real dtype is float32/float64.
+    boxsize: float
+        Physical size of the box the field was computed in.
+    kbins: int or None
+        Number of k bins; if None, defaults to min(full_nmesh) // 2 + 1.
+    mubins: int
+        Number of mu (angle-cosine) bins.
+    nthread: int or None
+        Number of threads passed to the C++ binning kernel.
+
+    Returns
+    -------
+    k_binc: ndarray, shape (kbins,)
+        Bin-center k values.
+    counts: ndarray, shape (kbins, mubins)
+        Mode counts per (k, mu) bin.
+    weighted_counts: ndarray, shape (kbins, mubins)
+        Mean power per (k, mu) bin.
+    bandpower: ndarray, shape (kbins * mubins,)
+        Flattened band power, ``weighted_counts * boxsize**3``.
     """
     raw_power = np.abs(field_fft) ** 2 # Could put this in C++
     nmesh = field_fft.shape

@@ -9,13 +9,22 @@ from ._helper_functions import *
 class FinufftPk:
     def __init__(self, nmesh: tuple[int], boxsize: float, dtype=np.complex64, **kwargs):
         """
-        Class inputs (N & M convention inherited from finufft):
-        positions: Input position grid, array of shape (D,N)
-        weights: Input weights, array of shape (D,N)
-        n_modes: Input number of modes, array of shape (D,M)
-        dtype: precision level (32 floating point or 64)
-        Lbox: int; box size in which points lie
-        kwargs: finufft fft precision and spreading function arguments -- upsampfac, fftw, modeord, eps
+        Build a FINUFFT type-1 plan for computing the density field on a
+        mode grid of shape ``nmesh`` (N & M convention inherited from finufft).
+
+        nmesh: tuple[int], length 1-3
+            Number of modes per axis of the real-space grid.
+        boxsize: float
+            Physical size of the box the input points lie in.
+        dtype: np.complex64 or np.complex128
+            Precision of the field/weights; determines the real dtype
+            (float32/float64) expected for positions.
+        kwargs: finufft plan/spreading arguments -- upsampfac, fftw,
+            modeord (must be 0), eps, nthreads.
+
+        Raises
+        ------
+        ValueError: if modeord != 0 or dtype is not complex64/complex128.
         """
         # Necessarily real space
         kwargs.setdefault("modeord", 0)
@@ -52,6 +61,18 @@ class FinufftPk:
         self.result = FinufftPkResult(boxsize=self.boxsize, nmesh=self.nmesh, finufft_kwargs=kwargs)
 
     def _plan_shape(self):
+        """
+        Return the FINUFFT mode-grid shape, with the last axis
+        collapsed to N//2+1 (real-to-complex convention).
+
+        Returns
+        -------
+        tuple[int], length 1-3: plan shape, e.g. (n0, ..., n_{d-2}, n_{d-1}//2 + 1).
+
+        Raises
+        ------
+        AssertionError: if self.nmesh does not have length 1-3.
+        """
         n_modes = np.atleast_1d(self.nmesh)
         if n_modes.ndim != 1 or not (1 <= len(n_modes) <= 3):
             raise AssertionError(
@@ -64,6 +85,22 @@ class FinufftPk:
         """
         Rescale points from [-pi,pi) and pass it to the FINUFFT plan.
         Does not create uniform grid yet (no spreading step).
+
+        positions: ndarray, shape (D, N), dtype float32/float64 matching
+            self.rdtype (dtype mismatch warns unless inplace=True, in which
+            case it raises). D must equal len(self.nmesh).
+        inplace: bool
+            If True, rescale positions in place (dtype must already match);
+            if False (default), rescale a copy and only warn on mismatch.
+
+        Side effects: sets self.pos_shape, self._Npts, self._realify_weights,
+        passes points to the FINUFFT plan via setpts, and records
+        self.result.kwargs['inplace'].
+
+        Raises
+        ------
+        AssertionError: if positions.shape[0] != len(self.nmesh).
+        TypeError: if inplace=True and positions.dtype != self.rdtype.
         """
         n_modes = np.atleast_1d(self.nmesh)
         dim = len(n_modes)
@@ -102,6 +139,24 @@ class FinufftPk:
         self.result.kwargs = {'inplace':inplace}
 
     def compute_field(self, weights: tuple = None, out: tuple = None):
+        """
+        Execute the FINUFFT plan to spread weighted points onto the
+        mode grid, producing the (complex) density field. Requires
+        set_positions to have been called first.
+
+        weights: ndarray, shape (N,), dtype self.cdtype, or None
+            Per-point weights; defaults to an array of ones.
+        out: ndarray, shape == self._plan_shape(), dtype self.cdtype, or None
+            Pre-allocated output array; if None, a new zero array is created.
+
+        Returns
+        -------
+        ndarray, shape self._plan_shape(), dtype self.cdtype: the density field.
+
+        Raises
+        ------
+        AssertionError: if weights.shape != (N,) or out.shape != plan shape.
+        """
         # set weights
         if weights is not None:
             if not weights.shape == (self._Npts,):
@@ -130,6 +185,30 @@ class FinufftPk:
         return field
 
     def compute_bandpower(self, field, kbins:int=None, mubins:int=1, nthread:int=None):
+            """
+            Bin the computed field into spherical (or mu-wedge) k-bins
+            to produce the power spectrum, via bandpower_from_field_cpp.
+
+            field: ndarray, shape self._plan_shape(), complex64/complex128
+                Density field as returned by compute_field.
+            kbins: int or None
+                Number of k bins; if None, defaults to min(nmesh)//2 + 1.
+            mubins: int
+                Number of mu (angle-cosine) bins.
+            nthread: int or None
+                Threads for the binning step; defaults to self._nthreads.
+
+            Returns
+            -------
+            k_binc: ndarray, shape (kbins,) -- bin-center k values.
+            counts: ndarray, shape (kbins, mubins) -- mode counts per bin.
+            weighted_counts: ndarray, shape (kbins, mubins) -- mean power per bin.
+            bandpower: ndarray, shape (kbins * mubins,) -- flattened band power.
+
+            Raises
+            ------
+            AssertionError: if field.shape != self._plan_shape().
+            """
             if nthread:
                 nthread_bandpower = nthread
             else:
@@ -163,9 +242,36 @@ class FinufftPkResult:
     kwargs: dict | None = None  # nthreads, dtype, kbins, mubins, inplace
 
     def Nyquist(self):
+        """
+        Return the Nyquist wavenumber implied by nmesh and boxsize.
+
+        Returns
+        -------
+        float: pi * min(nmesh) / boxsize.
+        """
         return np.pi * min(self.nmesh) / self.boxsize
 
 def powerspectrum_field(nmesh: tuple[int], boxsize: float, positions: tuple, weights: tuple = None, out: tuple = None, dtype=np.complex64, kbins:int=None, mubins:int=1, nthread:int=None, **kwargs):
+    """
+    Convenience wrapper that builds a FinufftPk plan, sets positions,
+    computes the field, and bins it into a power spectrum in one call.
+
+    nmesh: tuple[int], length 1-3 -- number of modes per axis.
+    boxsize: float -- physical size of the box the points lie in.
+    positions: ndarray, shape (D, N) -- point coordinates, D == len(nmesh).
+    weights: ndarray, shape (N,), or None -- per-point weights.
+    out: ndarray, shape matching the plan's mode grid, or None -- output buffer.
+    dtype: np.complex64 or np.complex128 -- field precision.
+    kbins: int or None -- number of k bins; defaults to min(nmesh)//2 + 1.
+    mubins: int -- number of mu (angle-cosine) bins.
+    nthread: int or None -- threads for the binning step.
+    kwargs: additional FINUFFT plan/spreading arguments.
+
+    Returns
+    -------
+    FinufftPkResult: populated with field, power, counts, weighted_counts,
+    k_avg, boxsize, nmesh, finufft_kwargs, and kwargs.
+    """
     print('Initializing FINUFFT Plan')
     kwargs.setdefault("fftw", 64)
     plan = FinufftPk(nmesh=nmesh, boxsize=boxsize, dtype=dtype, **kwargs)
