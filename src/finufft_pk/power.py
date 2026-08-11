@@ -125,15 +125,15 @@ class FinufftPk:
         # use a C++ function
         if inplace:
             if self.rdtype == np.float32:
-                rescale_points_f32(positions, self.boxsize)
+                rescale_points_f32(positions, self.boxsize, self._nthreads)
             elif self.rdtype == np.float64:
-                rescale_points_f64(positions, self.boxsize)
+                rescale_points_f64(positions, self.boxsize, self._nthreads)
         else:
             positions = np.copy(positions)
             if self.rdtype == np.float32:
-                rescale_points_f32(positions, self.boxsize)
+                rescale_points_f32(positions, self.boxsize, self._nthreads)
             elif self.rdtype == np.float64:
-                rescale_points_f64(positions, self.boxsize)
+                rescale_points_f64(positions, self.boxsize, self._nthreads)
         # FINUFFT asks for C arrays, if underlying data is not (dim, N) FINUFFT makes a copy
         self.pos_shape = positions.shape
         plan_last = self._plan_shape()[-1]  # = nmesh // 2 = 256
@@ -141,9 +141,9 @@ class FinufftPk:
         self._Npts = self.pos_shape[-1]
         self._realify_weights = np.empty(self._Npts, dtype=self.cdtype)
         if self.rdtype == np.float32:
-            realify_weights_f32(positions[-1, :], shift, self._realify_weights)
+            realify_weights_f32(positions[-1, :], shift, self._realify_weights, self._nthreads)
         elif self.rdtype == np.float64:
-            realify_weights_f64(positions[-1, :], shift, self._realify_weights)
+            realify_weights_f64(positions[-1, :], shift, self._realify_weights, self._nthreads)
         self.plan.setpts(*positions)
         self.result.kwargs = {"inplace": inplace}
 
@@ -245,6 +245,7 @@ class FinufftPk:
 
 @dataclass
 class FinufftPkResult:
+    # Add a flag to save field if wanted
     field: np.typing.ArrayLike | None = None  # shape (N,N, N//2+1)
     power: np.typing.ArrayLike | None = None  # length N
     boxsize: float | None = None

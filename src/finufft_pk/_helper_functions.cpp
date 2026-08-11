@@ -12,11 +12,14 @@ namespace nb = nanobind;
 template <typename T>
 void rescale_points_inplace(
     nb::ndarray<T, nb::c_contig, nb::device::cpu> points,
-    float boxsize
+    float boxsize,
+    int nthread
 ) {
     T* points_ptr = points.data();
     long long n_points = points.size();
-    #pragma omp parallel for schedule(static)
+    // nthread <= 0 (e.g. finufft's "use default" convention) means "let OpenMP decide"
+    int threads_to_use = (nthread > 0) ? nthread : omp_get_max_threads();
+    #pragma omp parallel for schedule(static) num_threads(threads_to_use)
     for (long long i = 0; i < n_points; ++i) {
         points_ptr[i] *= 2*M_PI/boxsize;
     }
@@ -26,16 +29,18 @@ template <typename T>
 void realify_weights_inplace(
     nb::ndarray<const T, nb::ndim<1>, nb::c_contig, nb::device::cpu> positions_last,
     long long shift,
-    nb::ndarray<std::complex<T>, nb::ndim<1>, nb::c_contig, nb::device::cpu> out
+    nb::ndarray<std::complex<T>, nb::ndim<1>, nb::c_contig, nb::device::cpu> out,
+    int nthread
 ) {
     const T* pos_ptr = positions_last.data();
     std::complex<T>* out_ptr = out.data();
     long long n = positions_last.shape(0);
+    int threads_to_use = (nthread > 0) ? nthread : omp_get_max_threads();
 
-    #pragma omp parallel for schedule(static)
+    #pragma omp parallel for schedule(static) num_threads(threads_to_use)
     for (long long i = 0; i < n; ++i) {
         T angle = -T(shift) * pos_ptr[i];
-        out_ptr[i] = std::exp(std::complex<T>(0, angle)); 
+        out_ptr[i] = std::exp(std::complex<T>(0, angle));
     }
 }
 
