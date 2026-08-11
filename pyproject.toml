@@ -5,10 +5,32 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "finufft-pk"
 version = "0.1.0"
-description = "A package to calculate the bandpowers of an FFT field faster and more accurately. Uses FINUFFT to transform a non-uniform set of points to a uniform grid and perform a FFT (uses FFTW under the hood)."
+description = "A package to calculate the power spectrum of an FFT field faster and more accurately. Uses FINUFFT to transform a non-uniform set of points to a uniform grid and perform a FFT (uses FFTW under the hood)."
 readme = "README.md"
 requires-python = ">=3.11.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Prerana Kottapalli", email = "prerana0207@gmail.com" },
+]
+keywords = ["finufft", "fft", "power spectrum", "nufft", "cosmology"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Scientific/Engineering :: Physics",
+]
 dependencies = ["finufft", "numpy"]
+
+[project.optional-dependencies]
+test = ["pytest>=9.1.1"]
+
+[project.urls]
+Homepage = "https://github.com/pk0207/finufft_pk"
+Repository = "https://github.com/pk0207/finufft_pk"
+Issues = "https://github.com/pk0207/finufft_pk/issues"
 
 [dependency-groups]
 dev = [
