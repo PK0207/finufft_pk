@@ -1,7 +1,7 @@
 import numpy as np
 import multiprocessing as mp
 import os
-from ._binning import kmu_binning_cpp_f32, kmu_binning_cpp_f64
+from ._binning import *
 
 def make_k_mu_edges(boxsize, nmesh, kbins=None, mubins=1):
     """Build the same k/mu bin edges abacus's calc_power uses internally, once."""

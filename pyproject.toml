@@ -5,7 +5,7 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "finufft-pk"
 version = "0.1.0"
-description = "Add your description here"
+description = "A package to calculate the bandpowers of an FFT field faster and more accurately. Uses FINUFFT to transform a non-uniform set of points to a uniform grid and perform a FFT (uses FFTW under the hood)."
 readme = "README.md"
 requires-python = ">=3.11.11"
 dependencies = ["finufft", "numpy"]
