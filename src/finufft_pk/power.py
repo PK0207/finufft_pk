@@ -31,11 +31,13 @@ class FinufftPk:
         kwargs.setdefault("eps", 1e-4)
         kwargs.setdefault("upsampfac", 1.25)
         kwargs.setdefault("fftw", 0)
-        if kwargs['modeord'] == 1:
-            raise ValueError('Mode order 1 is not supported in finufft_pk. Please use modeord = 0.')
+        if kwargs["modeord"] == 1:
+            raise ValueError(
+                "Mode order 1 is not supported in finufft_pk. Please use modeord = 0."
+            )
         # default num cpus is all in finufft plan
         kwargs.setdefault("nthreads", 0)
-        self._nthreads = kwargs['nthreads']
+        self._nthreads = kwargs["nthreads"]
 
         dtype_dict = {np.complex64: np.float32, np.complex128: np.float64}
         if dtype not in dtype_dict.keys():
@@ -58,7 +60,9 @@ class FinufftPk:
             dtype=dtype,
             **kwargs,
         )
-        self.result = FinufftPkResult(boxsize=self.boxsize, nmesh=self.nmesh, finufft_kwargs=kwargs)
+        self.result = FinufftPkResult(
+            boxsize=self.boxsize, nmesh=self.nmesh, finufft_kwargs=kwargs
+        )
 
     def _plan_shape(self):
         """
@@ -110,9 +114,14 @@ class FinufftPk:
             )
         if positions.dtype != self.rdtype:
             if not inplace:
-                warnings.warn(f"Positions array has dtype {positions.dtype}, which does not match the expected dtype {self.rdtype}. This will affect the performance of finufft.", UserWarning)
+                warnings.warn(
+                    f"Positions array has dtype {positions.dtype}, which does not match the expected dtype {self.rdtype}. This will affect the performance of finufft.",
+                    UserWarning,
+                )
             elif inplace:
-                raise TypeError(f"Positions array has dtype {positions.dtype}, which does not match the expected dtype {self.rdtype}.")
+                raise TypeError(
+                    f"Positions array has dtype {positions.dtype}, which does not match the expected dtype {self.rdtype}."
+                )
         # use a C++ function
         if inplace:
             if self.rdtype == np.float32:
@@ -128,7 +137,7 @@ class FinufftPk:
         # FINUFFT asks for C arrays, if underlying data is not (dim, N) FINUFFT makes a copy
         self.pos_shape = positions.shape
         plan_last = self._plan_shape()[-1]  # = nmesh // 2 = 256
-        shift = plan_last // 2              # = 128
+        shift = plan_last // 2  # = 128
         self._Npts = self.pos_shape[-1]
         self._realify_weights = np.empty(self._Npts, dtype=self.cdtype)
         if self.rdtype == np.float32:
@@ -136,7 +145,7 @@ class FinufftPk:
         elif self.rdtype == np.float64:
             realify_weights_f64(positions[-1, :], shift, self._realify_weights)
         self.plan.setpts(*positions)
-        self.result.kwargs = {'inplace':inplace}
+        self.result.kwargs = {"inplace": inplace}
 
     def compute_field(self, weights: tuple = None, out: tuple = None):
         """
@@ -160,23 +169,23 @@ class FinufftPk:
         # set weights
         if weights is not None:
             if not weights.shape == (self._Npts,):
-                        raise AssertionError(
-                            f"Shape of weights {weights.shape} must match number of points ({self._Npts},)"
-                        )
-            self.result.kwargs['input_weights'] = weights
+                raise AssertionError(
+                    f"Shape of weights {weights.shape} must match number of points ({self._Npts},)"
+                )
+            self.result.kwargs["input_weights"] = weights
         else:
             weights = np.ascontiguousarray(
                 np.ones(shape=(self._Npts)), dtype=self.cdtype
             )
         self._w_shape = weights.shape
-        
+
         # set output
         if out is not None:
             if not out.shape == self._plan_shape():
                 raise AssertionError(
                     f"Shape of output {out.shape} and meshgrid {self._plan_shape()} must match"
                 )
-            self.result.kwargs['out_array'] = out
+            self.result.kwargs["out_array"] = out
         else:
             out = np.zeros(self._plan_shape(), dtype=self.cdtype)
 
@@ -184,50 +193,55 @@ class FinufftPk:
         self.result.field = field
         return field
 
-    def compute_bandpower(self, field, kbins:int=None, mubins:int=1, nthread:int=None):
-            """
-            Bin the computed field into spherical (or mu-wedge) k-bins
-            to produce the power spectrum, via bandpower_from_field_cpp.
+    def compute_bandpower(
+        self, field, kbins: int = None, mubins: int = 1, nthread: int = None
+    ):
+        """
+        Bin the computed field into spherical (or mu-wedge) k-bins
+        to produce the power spectrum, via bandpower_from_field_cpp.
 
-            field: ndarray, shape self._plan_shape(), complex64/complex128
-                Density field as returned by compute_field.
-            kbins: int or None
-                Number of k bins; if None, defaults to min(nmesh)//2 + 1.
-            mubins: int
-                Number of mu (angle-cosine) bins.
-            nthread: int or None
-                Threads for the binning step; defaults to self._nthreads.
+        field: ndarray, shape self._plan_shape(), complex64/complex128
+            Density field as returned by compute_field.
+        kbins: int or None
+            Number of k bins; if None, defaults to min(nmesh)//2 + 1.
+        mubins: int
+            Number of mu (angle-cosine) bins.
+        nthread: int or None
+            Threads for the binning step; defaults to self._nthreads.
 
-            Returns
-            -------
-            k_binc: ndarray, shape (kbins,) -- bin-center k values.
-            counts: ndarray, shape (kbins, mubins) -- mode counts per bin.
-            weighted_counts: ndarray, shape (kbins, mubins) -- mean power per bin.
-            bandpower: ndarray, shape (kbins * mubins,) -- flattened band power.
+        Returns
+        -------
+        k_binc: ndarray, shape (kbins,) -- bin-center k values.
+        counts: ndarray, shape (kbins, mubins) -- mode counts per bin.
+        weighted_counts: ndarray, shape (kbins, mubins) -- mean power per bin.
+        bandpower: ndarray, shape (kbins * mubins,) -- flattened band power.
 
-            Raises
-            ------
-            AssertionError: if field.shape != self._plan_shape().
-            """
-            if nthread:
-                nthread_bandpower = nthread
-            else:
-                nthread_bandpower = self._nthreads
-            if field.shape != self._plan_shape():
-                raise AssertionError(
-                    f"Shape of field {field.shape} must match plan shape {self._plan_shape()}"
-                )
-            k_binc, counts, weighted_counts, bandpower = bandpower_from_field_cpp(field, self.boxsize, kbins, mubins, nthread=nthread_bandpower)
-            self.result.k_avg = k_binc
-            self.result.counts = counts
-            self.result.weighted_counts = weighted_counts
-            self.result.power = bandpower
-            if not kbins:
-                self.result.kwargs['kbins'] = min(self.nmesh) // 2 + 1
-            else:
-                self.result.kwargs['kbins'] = kbins
-            self.result.kwargs['mubins'] = mubins
-            return k_binc, counts, weighted_counts, bandpower
+        Raises
+        ------
+        AssertionError: if field.shape != self._plan_shape().
+        """
+        if nthread:
+            nthread_bandpower = nthread
+        else:
+            nthread_bandpower = self._nthreads
+        if field.shape != self._plan_shape():
+            raise AssertionError(
+                f"Shape of field {field.shape} must match plan shape {self._plan_shape()}"
+            )
+        k_binc, counts, weighted_counts, bandpower = bandpower_from_field_cpp(
+            field, self.boxsize, kbins, mubins, nthread=nthread_bandpower
+        )
+        self.result.k_avg = k_binc
+        self.result.counts = counts
+        self.result.weighted_counts = weighted_counts
+        self.result.power = bandpower
+        if not kbins:
+            self.result.kwargs["kbins"] = min(self.nmesh) // 2 + 1
+        else:
+            self.result.kwargs["kbins"] = kbins
+        self.result.kwargs["mubins"] = mubins
+        return k_binc, counts, weighted_counts, bandpower
+
 
 @dataclass
 class FinufftPkResult:
@@ -251,7 +265,19 @@ class FinufftPkResult:
         """
         return np.pi * min(self.nmesh) / self.boxsize
 
-def powerspectrum_field(nmesh: tuple[int], boxsize: float, positions: tuple, weights: tuple = None, out: tuple = None, dtype=np.complex64, kbins:int=None, mubins:int=1, nthread:int=None, **kwargs):
+
+def powerspectrum_field(
+    nmesh: tuple[int],
+    boxsize: float,
+    positions: tuple,
+    weights: tuple = None,
+    out: tuple = None,
+    dtype=np.complex64,
+    kbins: int = None,
+    mubins: int = 1,
+    nthread: int = None,
+    **kwargs,
+):
     """
     Convenience wrapper that builds a FinufftPk plan, sets positions,
     computes the field, and bins it into a power spectrum in one call.
@@ -272,7 +298,7 @@ def powerspectrum_field(nmesh: tuple[int], boxsize: float, positions: tuple, wei
     FinufftPkResult: populated with field, power, counts, weighted_counts,
     k_avg, boxsize, nmesh, finufft_kwargs, and kwargs.
     """
-    print('Initializing FINUFFT Plan')
+    print("Initializing FINUFFT Plan")
     kwargs.setdefault("fftw", 64)
     plan = FinufftPk(nmesh=nmesh, boxsize=boxsize, dtype=dtype, **kwargs)
     print("setting positions")
@@ -282,4 +308,4 @@ def powerspectrum_field(nmesh: tuple[int], boxsize: float, positions: tuple, wei
     print("computing bandpowers")
     plan.compute_bandpower(field, kbins, mubins, nthread)
 
-    return plan.result #Change to FINUFFT data class
+    return plan.result  # Change to FINUFFT data class
