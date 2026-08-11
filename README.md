@@ -20,18 +20,18 @@ FFTW bundled, so no separate FFTW/FINUFFT C library installation is required.
 
 ### Build
 
-``` git clone git@github.com:pk0207/finufft_pk.git
+```bash
+git clone git@github.com:pk0207/finufft_pk.git
 cd finufft_pk
 pip install .
-
 ```
 
 or with uv
 
-``` git clone git@github.com:pk0207/finufft_pk.git
+```bash
+git clone git@github.com:pk0207/finufft_pk.git
 cd finufft_pk
 uv sync
-
 ```
 
 ## Usage
@@ -56,7 +56,10 @@ A quick way to get one power spectrum from a set of non-uniform points.
 
 ### Usage example
 
-``` # Create a set of non-uniform points with some density in a 3D box
+```python
+import numpy as np
+from finufft_pk import FinufftPk
+# Create a set of non-uniform points with some density in a 3D box
 # Accepts 1-3 dimensional data
 
 boxsize = 250 # (Mpc / h)
@@ -64,7 +67,7 @@ density = 1e-4 # (Mpc / h)**-3
 N = int(density * (boxsize**3))
 positions = np.random.uniform(0, boxsize, size=(3, N))
 
-# Set the number of grid-cells to divide the box into. 
+# Set the number of grid-cells to divide the box into.
 # Allowed to be any arbitrary set of integers
 
 xmesh = 500
@@ -148,17 +151,21 @@ Any keyword accepted by `finufft.Plan` (besides `modeord`, which `finufft_pk` fi
 `0`) can be passed straight through `FinufftPk(...)` or `powerspectrum_field(...)`,
 for example `eps`, `upsampfac`, `nthreads`, and `fftw`.
 
-#### `eps` and `upsampfac` 
+#### `eps` and `upsampfac`
 
-`eps` and `upsampfac` are internal FINUFFT key word arguments that affect how the input mesh grid is treated and how kernel width is set. 
-`eps` sets the number of decimals to which the solution should be calculated (precision). The FINUFFT default is 1e-6, while the `finufft_pk` default is 1e-4.
-`upsampfac` determines by how much the internal meshgrid spacing is multiplied for the spreading step. The FINUFFT default is 2 while the `finufft_pk` default is 1.25
+`eps` and `upsampfac` are internal FINUFFT keyword arguments that affect how the input mesh grid is treated and how kernel width is set.
+
+- `eps` sets the number of decimals to which the solution should be calculated (precision). The FINUFFT default is 1e-6, while the `finufft_pk` default is 1e-4.
+- `upsampfac` determines by how much the internal meshgrid spacing is multiplied for the spreading step. The FINUFFT default is 2, while the `finufft_pk` default is 1.25.
+
 These design decisions were made to improve speed performance.
 
 #### `nthreads`
-`nthreads` is the number of CPUs used throughout FINUFFT and `finufft_pk`. The default is set to `0` which means all available CPUs will be used. 
+
+`nthreads` is the number of CPUs used throughout FINUFFT and `finufft_pk`. The default is set to `0`, which means all available CPUs will be used.
 
 #### `fftw`
+
 FINUFFT uses the FFTW fourier transform code to do a fourier transform. `fftw` refers to the FFTW mode to use.
 
 - `0` is measure mode, where the FFTW plan is more carefully estimated. This slows down the initial set up but significantly speeds up subsequent runs on the same initialization.
@@ -189,6 +196,7 @@ Note that `compute_bandpower` expects a Fourier-space field, so it should not be
 called on the output of a `spreadinterponly` plan.
 
 ## 2D bandpower binnings
+
 By default, `finufft_pk` calculates binning only along the line of sight (i.e., only uses radial k bins). It does contain the option to do angular binning `mubins` in the `compute_bandpower()` step, which determines the number of angular bins one wants to set up.
 
 Both the pure-Python (`bandpower_from_field`) and C++-accelerated
@@ -209,7 +217,7 @@ bandpower.reshape(100, 5)  # P(k, mu), one row per k bin, one column per mu wedg
 
 # Cosmological and Mathematical Background
 
-The power spectrum - P(k) - of the distribution of galaxies in the universe (observed or simulated) completely encodes the large-scale spatial distribution of matter in the universe. Knowing this distribution helps cosmologists infer information about the growth of large scale structure, and fundamental physics. 
+The power spectrum - P(k) - of the distribution of galaxies in the universe (observed or simulated) completely encodes the large-scale spatial distribution of matter in the universe. Knowing this distribution helps cosmologists infer information about the growth of large scale structure, and fundamental physics.
 P(k) is the amplitude of fourier modes k, which represents the number of galaxies that are a fourier space distance k from each other.
 
 ## Steps to calculate a power spectrum from a set of galaxies
@@ -218,7 +226,7 @@ P(k) is the amplitude of fourier modes k, which represents the number of galaxie
 
 <div align="center">
 
-  <img src="readme_images/spreading diagram.png" 
+  <img src="readme_images/spreading%20diagram.png"
   alt="A diagram depicting the spreading step of the powerspectrum creation. Three grids are shown. The first grid is shown over a distribution of points that represent galaxy particles. The second grid shows an example of how 'mass' might be distributed on the grid for some of the points. The third grid shows the amplitude of the points 'mass' in each grid cell, with a darker red representing more 'mass'. This is a simple illustration of the spreading step of the power spectrum creation."
   width="20%">
 
@@ -235,7 +243,7 @@ Insert kernel comparison diagram
 
 <div align="center">
 
-  <img src="readme_images/binning diagram.png" 
+  <img src="readme_images/binning%20diagram.png"
   alt="A diagram depicting the binning step of the powerspectrum creation. A resulting 2D grid of points (uniform for ease of interpretation) is shown in purple. The red curved lines are the locations in k-space that all have the same abosolute k-value. The points along the red lines are binned and normalized by counts to create the power spectrum."
   width="20%">
 
@@ -248,7 +256,7 @@ This package is powered by the flatiron institute non-uniform fast fourier trans
 
 Since `finufft_pk` is built around FINUFFT, is inherits its mathematical conventions [FINUFFT documentation](https://finufft.readthedocs.io/en/latest/math.html).
 
-1. **The Fourier Transform Convention:** 
+1. **The Fourier Transform Convention:**
 $$ f_k := \sum_{j=1}^{M} c_j e^{-i \text{\textbf{k}} \cdot \text{\textbf{x}}_j} $$
 By this definition, the points have to be rescaled to $[- \pi, \pi)$ before transforming.
 
@@ -261,7 +269,7 @@ K_{N_i} := \begin{cases}
 $$
 The FINUFFT fourier mode convention is ${-N_i/2,...0,...,N_i/2 - 1}$.
 
-3. **The Half-Plane Trick:** `finufft_pk` always takes a real distribution of points. A real matrix of points is Hermitian symmetric, so only half of the solution (along the diagonal) needs to be calculated. The solution for the other half is identical, and can be obtained just by reflecting the first half's solution. 
+3. **The Half-Plane Trick:** `finufft_pk` always takes a real distribution of points. A real matrix of points is Hermitian symmetric, so only half of the solution (along the diagonal) needs to be calculated. The solution for the other half is identical, and can be obtained just by reflecting the first half's solution.
 
 FINUFFT always assumes a complex distribution. This means that there is no assumption of Hermitian symmetry, and FINUFFT is doing double the amount of work for real points by calculating the solution for the full distribution of points.
 
@@ -269,11 +277,12 @@ We can trick FINUFFT into doing only half the work by only giving it half the ma
 $$ c_j \rightarrow c_j e^{i \frac{M_\text{last}}{4} \text{last}_j} $$
 
 # Acknowledgements
+
 The author of this package would like to thank the Simons Foundation summer internship program with the Scientific Computing Core (SCC) for the opportunity to work on this project from June to August 2026. They would also like to thank Lehman Garrison for his supervision and guidance during the construction of this project, from whom they have learned so much.
 
 # References
 
-1. Barnett, A. H., Magland, J., & af Klinteberg, L. (2019). A parallel nonuniform fast Fourier transform library based on an “exponential of semicircle" kernel. SIAM Journal on Scientific Computing, 41(5), C479-C504. 
+1. Barnett, A. H., Magland, J., & af Klinteberg, L. (2019). A parallel nonuniform fast Fourier transform library based on an “exponential of semicircle" kernel. SIAM Journal on Scientific Computing, 41(5), C479-C504.
 
 2. Barnett, A. H. (2021). Aliasing error of the exp⁡(β1− z2) kernel in the nonuniform fast Fourier transform. Applied and Computational Harmonic Analysis, 51, 1-16. 
 
