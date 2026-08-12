@@ -41,6 +41,7 @@ Capabilities:
 - Arbitrary number of dimensions (1-3)
 - Arbitrary mesh set up to make uniform grid
 - Independently update weights without re-initializing points distribution
+- Fast weight updates to enable MCMC applications
 
 Limitations (do not yet support):
 
@@ -212,8 +213,6 @@ k_binc, counts, weighted_counts, bandpower = plan.compute_bandpower(
 )
 bandpower.reshape(100, 5)  # P(k, mu), one row per k bin, one column per mu wedge
 ```
-
-## MCMC
 
 # Cosmological and Mathematical Background
 

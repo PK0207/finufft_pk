@@ -1,13 +1,16 @@
-from finufft_pk.power import FinufftPk
+from finufft_pk.power import FinufftPk, powerspectrum_field
 import numpy as np
 import pickle
 import time
 
 def main():
-    fname = '/mnt/home/pkottapalli/ceph/positions_grid_512_nbar1_P01.pkl'
+    fname = 'tests/data/reference_small.pkl'
     with open(fname, 'rb') as f:
         pos_dict = pickle.load(f)
     ngen = pos_dict['ngen']
+    xngen = ngen
+    yngen = ngen
+    zngen = ngen
     # stored as (N, D); set_positions needs (D, N)
     pos_red = np.ascontiguousarray(pos_dict['pos'].T, dtype='float32')
     L = pos_dict['L']
@@ -15,7 +18,7 @@ def main():
 
     print('Initializing FINUFFT Plan')
     start = time.time()
-    powerspectrum = FinufftPk(nmesh=(ngen, ngen, ngen), boxsize=L)
+    powerspectrum = FinufftPk(nmesh=(xngen, yngen, zngen), boxsize=L)
     end = time.time()
     print(f"Plan time {end-start}")
     print("setting positions")
@@ -27,7 +30,7 @@ def main():
     weights = np.ascontiguousarray(
                     np.ones(shape=(Nred)), dtype=np.complex64
                 )
-    out = np.zeros((ngen, ngen, ngen//2+1), dtype=np.complex64)
+    out = np.zeros((xngen, yngen, zngen//2+1), dtype=np.complex64)
     start = time.time()
     field = powerspectrum.compute_field(weights, out)
     end = time.time()
@@ -37,8 +40,9 @@ def main():
     k_binc, counts, weighted_counts, bandpowers = powerspectrum.compute_bandpower(field=field)
     end = time.time()
     print(f"bandpower time {end-start}")
+    print(powerspectrum.result)
 
-    # _, counts, weighted_counts, bandpowers = powerspectrum_field((ngen, ngen, ngen), L, pos_red)
+    ps_result = powerspectrum_field((xngen, yngen, zngen), L, pos_red)
     with open('test_power_calc.pkl', 'wb') as file:
         pickle.dump((weighted_counts, counts, bandpowers), file)
 
