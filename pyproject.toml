@@ -48,6 +48,11 @@ skip = "*-musllinux* pp*"
 test-command = "pytest {project}/tests"
 test-extras = ["test"]
 
+# manylinux2014's GCC (10.2) is too old to build current numpy from source,
+# and numpy no longer ships prebuilt wheels for the manylinux2014 tag.
+manylinux-x86_64-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
+
 # Apple's default clang has no OpenMP support, so build with Homebrew's LLVM
 # clang (which does) and point it at Homebrew's libomp runtime.
 [tool.cibuildwheel.macos]
@@ -59,3 +64,6 @@ CXX = "$(brew --prefix llvm)/bin/clang++"
 LDFLAGS = "-L$(brew --prefix libomp)/lib"
 CPPFLAGS = "-I$(brew --prefix libomp)/include"
 CMAKE_PREFIX_PATH = "$(brew --prefix libomp)"
+# Homebrew's libomp bottle requires macOS 14+; match the wheel's declared
+# minimum to that so delocate doesn't reject the dependency mismatch.
+MACOSX_DEPLOYMENT_TARGET = "14.0"
