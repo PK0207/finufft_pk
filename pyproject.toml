@@ -41,3 +41,21 @@ wheel.packages = ["cpp_testing", "src/finufft_pk"]
 
 [tool.uv]
 cache-keys = [{ file = "pyproject.toml" }, { file = "CMakeLists.txt" }, { file = "cpp_testing/**/*.cpp" }, { file = "src/finufft_pk/**/*.cpp" }]
+
+[tool.cibuildwheel]
+build = "cp311-* cp312-* cp313-*"
+skip = "*-musllinux* pp*"
+test-command = "pytest {project}/tests"
+test-extras = ["test"]
+
+# Apple's default clang has no OpenMP support, so build with Homebrew's LLVM
+# clang (which does) and point it at Homebrew's libomp runtime.
+[tool.cibuildwheel.macos]
+before-all = "brew install llvm libomp"
+
+[tool.cibuildwheel.macos.environment]
+CC = "$(brew --prefix llvm)/bin/clang"
+CXX = "$(brew --prefix llvm)/bin/clang++"
+LDFLAGS = "-L$(brew --prefix libomp)/lib"
+CPPFLAGS = "-I$(brew --prefix libomp)/include"
+CMAKE_PREFIX_PATH = "$(brew --prefix libomp)"
