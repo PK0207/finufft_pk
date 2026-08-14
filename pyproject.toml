@@ -7,7 +7,7 @@ name = "finufft-pk"
 version = "0.1.0"
 description = "A package to calculate the power spectrum of an FFT field faster and more accurately. Uses FINUFFT to transform a non-uniform set of points to a uniform grid and perform a FFT (uses FFTW under the hood)."
 readme = "README.md"
-requires-python = ">=3.11.11"
+requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [
