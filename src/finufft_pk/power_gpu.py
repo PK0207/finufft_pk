@@ -1,9 +1,10 @@
 import warnings
 import cupy as cp
-from .binning import bandpower_from_field_cpp
+from .binning_gpu import bandpower_from_field_gpu
 from dataclasses import dataclass
 from cufinufft import Plan
 from ._helper_functions import *
+import os
 
 
 class FinufftPk:
@@ -181,7 +182,7 @@ class FinufftPk:
         return field
 
     def compute_bandpower(
-        self, field, kbins: int = None, mubins: int = 1, nthread: int = None
+        self, field, kbins: int = None, mubins: int = 1
     ):
         """
         Bin the computed field into spherical (or mu-wedge) k-bins
@@ -207,16 +208,12 @@ class FinufftPk:
         ------
         AssertionError: if field.shape != self._plan_shape().
         """
-        if nthread:
-            nthread_bandpower = nthread
-        else:
-            nthread_bandpower = self._nthreads
         if field.shape != self._plan_shape():
             raise AssertionError(
                 f"Shape of field {field.shape} must match plan shape {self._plan_shape()}"
             )
-        k_binc, counts, weighted_counts, bandpower = bandpower_from_field(
-            field, self.boxsize, kbins, mubins, nthread=nthread_bandpower
+        k_binc, counts, weighted_counts, bandpower = bandpower_from_field_gpu(
+            field, self.boxsize, kbins, mubins
         )
         self.result.k_avg = k_binc
         self.result.counts = counts
@@ -287,13 +284,12 @@ def powerspectrum_field(
     k_avg, boxsize, nmesh, finufft_kwargs, and kwargs.
     """
     print("Initializing FINUFFT Plan")
-    kwargs.setdefault("fftw", 64)
     plan = FinufftPk(nmesh=nmesh, boxsize=boxsize, dtype=dtype, **kwargs)
     print("setting positions")
     plan.set_positions(positions=positions)
     print("computing field")
     field = plan.compute_field(weights, out)
     print("computing bandpowers")
-    plan.compute_bandpower(field, kbins, mubins, nthread)
+    plan.compute_bandpower(field, kbins, mubins)
 
     return plan.result  # Change to FINUFFT data class

@@ -2,7 +2,6 @@ import numpy as np
 import multiprocessing as mp
 import os
 from ._binning import *
-import cupy as cp
 
 
 def make_k_mu_edges(boxsize, nmesh, kbins=None, mubins=1):
